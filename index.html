@@ -1,0 +1,2412 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover,maximum-scale=1,user-scalable=no">
+<title>MINI FPS</title>
+<style>
+:root{
+  --bg:#0b0f14; --panel:#131a22; --panel2:#1b2430; --line:#2e3a48;
+  --gold:#e6b84a; --gold2:#ffd977; --text:#e8edf2; --sub:#8e9bab;
+  --ok:#3ddc4a; --warn:#f0c419; --bad:#e53935; --accent:#5fb3ff;
+}
+*{box-sizing:border-box}
+html,body{margin:0;height:100%;overflow:hidden;background:#000;color:var(--text);
+  font-family:"Hiragino Kaku Gothic ProN","Yu Gothic UI","Meiryo",system-ui,sans-serif;
+  user-select:none;-webkit-user-select:none;-webkit-tap-highlight-color:transparent}
+#err{position:fixed;top:0;left:0;right:0;max-height:40vh;overflow:auto;display:none;margin:0;padding:10px;
+  background:rgba(140,0,0,.94);color:#fff;font:13px monospace;white-space:pre-wrap;z-index:10000}
+
+/* ---------- HUD ---------- */
+#hud{position:fixed;inset:0;pointer-events:none;display:none}
+#cross{position:absolute;left:50%;top:50%;width:22px;height:22px;transform:translate(-50%,-50%)}
+#cross::before,#cross::after{content:"";position:absolute;background:rgba(120,255,160,.95);box-shadow:0 0 3px #000}
+#cross::before{left:10px;top:0;width:2px;height:22px}
+#cross::after{top:10px;left:0;width:22px;height:2px}
+#cross.hit::before,#cross.hit::after{background:#ff5252}
+.hudbox{position:absolute;background:rgba(10,14,20,.72);border:1px solid var(--line);
+  border-left:3px solid var(--gold);padding:8px 12px;border-radius:4px}
+#missionBox{left:16px;top:16px;min-width:240px}
+.label{font-size:11px;letter-spacing:.2em;color:var(--sub);font-weight:700}
+#mission{font-size:17px;font-weight:700;margin-top:2px}
+#missBar{height:6px;background:#2a3440;border-radius:3px;margin-top:6px;overflow:hidden}
+#missFill{height:100%;width:0;background:linear-gradient(90deg,var(--gold),var(--gold2))}
+#coinBox{right:16px;top:16px;text-align:right}
+#coinVal{font-size:22px;font-weight:800;color:var(--gold2)}
+#mapBox{right:16px;top:92px;padding:6px 6px 4px}
+#minimap{display:block;width:150px;height:102px;image-rendering:pixelated;border-radius:2px}
+#fpsBox{left:16px;top:92px;padding:4px 10px;font:600 12px/1.6 ui-monospace,Menlo,Consolas,monospace;
+  color:#bfffd0;white-space:nowrap;display:none}
+#hpBox{left:16px;bottom:16px;width:340px}
+#hpRow{display:flex;justify-content:space-between;align-items:baseline}
+#hpwrap{position:relative;height:22px;background:#23303c;border-radius:3px;margin-top:6px;overflow:hidden}
+#hpbar{height:100%;width:100%;background:var(--ok)}
+#hptext{position:absolute;inset:0;display:flex;align-items:center;justify-content:center;font-weight:700;font-size:13px;text-shadow:0 1px 2px #000}
+#ammoBox{right:16px;bottom:16px;text-align:right;min-width:200px}
+#ammo{font-size:30px;font-weight:800;letter-spacing:.04em;line-height:1.1}
+#ammo small{font-size:16px;color:var(--sub);font-weight:600}
+#weaponName{font-size:13px;color:var(--gold2);font-weight:700;margin-top:2px}
+#reloadTag{color:var(--warn);font-size:12px;font-weight:700;letter-spacing:.1em}
+#statusBox{left:50%;bottom:16px;transform:translateX(-50%);font-size:12px;color:var(--sub);text-align:center;white-space:nowrap}
+#toast{position:absolute;top:24%;left:50%;transform:translateX(-50%);padding:10px 22px;
+  background:rgba(10,14,20,.82);border:1px solid var(--gold);border-radius:4px;color:var(--gold2);
+  font-weight:800;font-size:20px;letter-spacing:.08em;opacity:0;transition:opacity .3s;white-space:nowrap}
+
+/* ---------- Touch controls ---------- */
+#touchUI{position:fixed;inset:0;display:none;z-index:5;touch-action:none}
+#stickZone{position:absolute;left:0;bottom:0;width:46%;height:100%}
+#lookZone{position:absolute;right:0;top:0;width:54%;height:100%}
+#stickBase{position:absolute;width:120px;height:120px;margin:-60px 0 0 -60px;border-radius:50%;
+  border:2px solid rgba(255,255,255,.35);background:rgba(255,255,255,.07);display:none}
+#stickKnob{position:absolute;left:50%;top:50%;width:56px;height:56px;margin:-28px 0 0 -28px;border-radius:50%;
+  background:rgba(255,217,119,.5);border:2px solid rgba(255,255,255,.7)}
+.tbtn{position:absolute;z-index:3;display:flex;align-items:center;justify-content:center;width:64px;height:64px;
+  border-radius:50%;background:rgba(10,14,20,.55);border:2px solid rgba(255,255,255,.55);color:#fff;
+  font:800 14px sans-serif;touch-action:none}
+.tbtn.fire{width:120px;height:120px;right:20px;bottom:20px;background:rgba(200,60,40,.55);border-color:#ffd0c0;font-size:16px}
+#tReload{right:156px;bottom:20px;width:72px;height:72px}
+#tSwap{right:156px;bottom:104px}
+#tView{right:20px;bottom:152px}
+#tReinf{right:90px;bottom:152px}
+#tPause{top:12px;left:50%;margin-left:-22px;width:44px;height:44px}
+
+/* ---------- Overlay / panels ---------- */
+#overlay{position:fixed;inset:0;display:flex;align-items:center;justify-content:center;overflow:auto;
+  background:radial-gradient(ellipse at center,rgba(20,30,42,.85) 0%,rgba(0,0,0,.92) 100%)}
+#panel{width:min(880px,94vw);margin:20px 0}
+.card{background:linear-gradient(180deg,var(--panel2),var(--panel));border:1px solid var(--line);
+  border-radius:6px;padding:22px 24px;position:relative;box-shadow:0 10px 30px rgba(0,0,0,.45)}
+.card::before{content:"";position:absolute;left:-1px;top:-1px;width:40px;height:3px;background:var(--gold)}
+.eyebrow{font-size:11px;letter-spacing:.3em;color:var(--gold);font-weight:700}
+h1.title{font-size:46px;margin:4px 0 0;font-weight:900;letter-spacing:.06em;
+  background:linear-gradient(180deg,#fff,#c9d3de);-webkit-background-clip:text;background-clip:text;color:transparent}
+h2{font-size:24px;margin:4px 0 0;font-weight:800;letter-spacing:.05em}
+.sub{color:var(--sub);font-size:14px;line-height:1.6;margin:6px 0 0}
+.divider{height:1px;background:var(--line);margin:16px 0}
+.section-h{display:flex;align-items:center;gap:10px;margin:18px 0 10px}
+.section-h span{font-size:13px;letter-spacing:.2em;color:var(--sub);font-weight:700;white-space:nowrap}
+.section-h::after{content:"";flex:1;height:1px;background:var(--line)}
+.coinsBig{display:inline-flex;align-items:center;gap:10px;background:rgba(230,184,74,.08);
+  border:1px solid rgba(230,184,74,.45);border-radius:999px;padding:6px 16px;margin-top:12px}
+.coinsBig b{font-size:24px;color:var(--gold2);font-variant-numeric:tabular-nums}
+.coinsBig span{font-size:12px;color:var(--sub);letter-spacing:.15em;font-weight:700}
+.loadout{display:grid;grid-template-columns:repeat(4,1fr);gap:10px;margin-top:14px}
+.slot{background:rgba(0,0,0,.25);border:1px solid var(--line);border-radius:4px;padding:10px 12px}
+.slot .k{font-size:11px;letter-spacing:.2em;color:var(--sub);font-weight:700}
+.slot .v{font-size:15px;font-weight:700;margin-top:4px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.grid2{display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-top:8px}
+.optrow{display:flex;gap:10px;justify-content:center;flex-wrap:wrap;margin-top:12px}
+.devinfo{display:flex;flex-wrap:wrap;gap:8px;margin-top:12px}
+.devinfo span{font-size:12px;padding:4px 10px;border:1px solid var(--line);border-radius:999px;color:var(--sub)}
+.setrow{display:flex;justify-content:space-between;align-items:center;gap:14px;padding:12px 0;border-bottom:1px solid var(--line);flex-wrap:wrap}
+.setrow b{font-size:15px}
+
+/* ---------- Buttons ---------- */
+.btn{font:700 15px sans-serif;padding:11px 20px;min-width:120px;
+  border:1px solid #4a5a6c;border-radius:4px;background:linear-gradient(180deg,#26313e,#18212b);
+  color:var(--text);cursor:pointer;letter-spacing:.05em;transition:transform .08s,border-color .15s,background .15s}
+.btn:hover:not(:disabled){border-color:var(--gold);background:linear-gradient(180deg,#2e3b4a,#1d2733)}
+.btn:active:not(:disabled){transform:translateY(1px)}
+.btn:disabled{opacity:.38;cursor:not-allowed}
+.btn.sel{border-color:var(--gold2);color:var(--gold2);box-shadow:inset 0 0 0 1px var(--gold2)}
+.btn.primary{background:linear-gradient(180deg,#e8c25e,#b98b2a);color:#1a1307;border-color:#f2d27a}
+.btn.primary:hover:not(:disabled){background:linear-gradient(180deg,#f3d16e,#c79a35);border-color:#fff1b8}
+.btn.big{font-size:19px;padding:14px 36px;min-width:220px}
+.seg{display:flex;gap:8px;flex-wrap:wrap}
+.seg .btn{min-width:88px}
+
+/* ---------- Shop ---------- */
+.shopHead{display:flex;justify-content:space-between;align-items:flex-end;gap:16px;flex-wrap:wrap}
+.cards{display:grid;grid-template-columns:repeat(auto-fill,minmax(250px,1fr));gap:12px;margin-top:6px}
+.item{background:rgba(0,0,0,.28);border:1px solid var(--line);border-radius:5px;padding:14px;
+  display:flex;flex-direction:column;gap:8px;transition:border-color .15s}
+.item:hover{border-color:#4a5a6c}
+.item.owned{border-color:#3c5a3a}
+.item.equipped{border-color:var(--gold2);box-shadow:inset 0 0 0 1px rgba(255,217,119,.35)}
+.item .nm{font-size:16px;font-weight:800}
+.item .ds{font-size:12px;color:var(--sub);line-height:1.5;min-height:34px}
+.stat{display:grid;grid-template-columns:52px 1fr;align-items:center;gap:8px;font-size:11px;color:var(--sub);letter-spacing:.05em}
+.bar{height:6px;background:#23303c;border-radius:3px;overflow:hidden}
+.bar i{display:block;height:100%;background:linear-gradient(90deg,#4aa3ff,#8fd0ff)}
+.tag{display:inline-block;font-size:11px;padding:2px 8px;border-radius:999px;border:1px solid var(--line);color:var(--sub);letter-spacing:.08em;align-self:flex-start}
+.tag.own{color:#9be59f;border-color:#3c5a3a}
+.tag.eq{color:var(--gold2);border-color:var(--gold2)}
+.price{font-weight:800;color:var(--gold2);font-variant-numeric:tabular-nums}
+.item .act{margin-top:auto}
+.item .act .btn{width:100%;min-width:0}
+
+/* ---------- Touch-screen sizing ---------- */
+@media (pointer:coarse){
+  .btn{padding:14px 22px;font-size:16px}
+  .btn.big{padding:16px 36px}
+}
+@media (max-width:640px){
+  h1.title{font-size:34px}
+  .loadout{grid-template-columns:1fr 1fr}
+  #hpBox{width:52vw}
+  #ammoBox{min-width:0}
+  #missionBox{min-width:0;max-width:52vw}
+  #mapBox{display:none}
+}
+</style>
+</head>
+<body>
+<pre id="err"></pre>
+<div id="hurt"></div>
+<div id="hud">
+  <div id="cross"></div>
+  <div id="missionBox" class="hudbox">
+    <div class="label">MISSION</div>
+    <div id="mission"></div>
+    <div id="missBar"><div id="missFill"></div></div>
+  </div>
+  <div id="coinBox" class="hudbox">
+    <div class="label">COINS</div>
+    <div id="coinVal">0</div>
+  </div>
+  <div id="mapBox" class="hudbox">
+    <canvas id="minimap"></canvas>
+  </div>
+  <div id="fpsBox" class="hudbox"></div>
+  <div id="hpBox" class="hudbox">
+    <div id="hpRow"><span class="label">HEALTH</span></div>
+    <div id="hpwrap"><div id="hpbar"></div><span id="hptext"></span></div>
+  </div>
+  <div id="ammoBox" class="hudbox">
+    <div id="ammo"></div>
+    <div id="weaponName"></div>
+    <div id="reloadTag"></div>
+  </div>
+  <div id="statusBox" class="hudbox"></div>
+  <div id="toast"></div>
+</div>
+<div id="overlay"><div id="panel"></div></div>
+<div id="touchUI">
+  <div id="stickZone"><div id="stickBase"><div id="stickKnob"></div></div></div>
+  <div id="lookZone"></div>
+  <div class="tbtn" id="tPause">II</div>
+  <div class="tbtn fire" id="tFire">撃つ</div>
+  <div class="tbtn" id="tReload">R</div>
+  <div class="tbtn" id="tSwap">E</div>
+  <div class="tbtn" id="tView">V</div>
+  <div class="tbtn" id="tReinf">G</div>
+</div>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+<script>
+// ---------- Error display (shows problems on screen, no console needed) ----------
+const errBox = document.getElementById('err');
+function showErr(msg) {
+  errBox.style.display = 'block';
+  errBox.textContent += msg + '\n';
+}
+window.addEventListener('error', e => showErr('ERROR: ' + e.message + ' (line ' + e.lineno + ')'));
+window.addEventListener('unhandledrejection', e => showErr('PROMISE: ' + (e.reason && e.reason.stack || e.reason)));
+if (typeof THREE === 'undefined') showErr('THREE.js が読み込めませんでした（cdnjsがブロックされている可能性）');
+
+function main() {
+// ---------- Constants ----------
+const CELL = 4, WALL_H = 4, R = 0.35;
+const WIN_KILLS = 25, KILL_COIN = 2.5, WIN_COIN = 25;
+const ENEMY_N = 9;
+const CRATE_N = 5, CRATE_HP = 3, CRATE_RESPAWN = 25, CRATE_HALF = 0.45;
+const MEDKIT_HEAL = 25, MEDKIT_LIFE = 30;
+const MM_S = 6;
+const SECRET_COINS = 10000;
+const ALLY_HP = 4, ALLY_MAX = 6, REINF_N = 2, REINF_COST = 10, REINF_CD = 15;
+let CULL_D = 26;            // 描画距離（画質設定で変わります）
+let MAX_PARTICLES = 160;    // 粒子の上限（画質設定で変わります）
+const FLAKE_MAX = 400;      // 雪・葉の最大数（実際の数は画質設定で変わります）
+const FRAME_N = 240;        // FPS計測に使うフレーム数
+const TOUCH_LOOK = 0.0042;  // タッチ視点の基準感度（rad/px）
+const MOUSE_LOOK = 0.0022;  // マウス視点の基準感度（rad/px）
+const STICK_R = 56;         // スティックの最大半径（px）
+
+// 画質の段階（prCap: 描画解像度の上限, cull: 描画距離, parts: 粒子数, flakes: 雪・葉の数, fog: 霧の近さ・遠さ）
+const GFX_PRESETS = {
+  ultra: { label: 'ウルトラ', prCap: 2,    cull: 40, parts: 320, flakes: 400, fog: [18, 120] },
+  high:  { label: '高',       prCap: 1.5,  cull: 32, parts: 240, flakes: 300, fog: [16, 100] },
+  mid:   { label: '中',       prCap: 1.25, cull: 26, parts: 160, flakes: 200, fog: [16, 90] },
+  low:   { label: '低',       prCap: 1,    cull: 20, parts: 90,  flakes: 100, fog: [14, 70] },
+  min:   { label: '最小',     prCap: 0.6,  cull: 14, parts: 40,  flakes: 0,   fog: [10, 50] },
+};
+let gfxKey = 'mid';
+let gfx = GFX_PRESETS.mid;
+
+// 25 x 17 map: 1 = wall, . = open
+const MAP = [
+  "#########################",
+  "#.......#.......#.......#",
+  "#.......#.......#.......#",
+  "#.......#.......#.......#",
+  "#.......................#",
+  "#.......#.......#.......#",
+  "#.......#.......#.......#",
+  "####.###############.####",
+  "#.....##.........##.....#",
+  "#.......#.....#.........#",
+  "#.......................#",
+  "#.....##.....##.....##..#",
+  "#.......................#",
+  "#...#.........#.........#",
+  "#.......................#",
+  "#.........#.....#.......#",
+  "#########################"
+];
+const ROWS = MAP.length, COLS = MAP[0].length;
+const isWall = (c, r) => r < 0 || c < 0 || r >= ROWS || c >= COLS || MAP[r][c] === '#';
+const clamp = (v, a, b) => Math.min(b, Math.max(a, v));
+const V = (x, y, z) => new THREE.Vector3(x, y, z);
+const UP = V(0, 1, 0);
+const fmt = c => String(Math.round(c * 10) / 10);
+const esc = s => String(s).replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+
+// ---------- Gender skins ----------
+const SKINS = {
+  male: {
+    label: '男性', uniform: 0xffffff, skin: 0xcf9b72, helmet: true, hair: 0x2b1d12,
+    shoulder: 0.27, hip: 0.1, torsoW: 0.42, depth: 0.24, chest: false,
+    legR: 0.085, armR: 0.06, handR: 0.034, vArm: 0.035, vHand: 0.034
+  },
+  female: {
+    label: '女性', uniform: 0xd6cbb0, skin: 0xe8b793, helmet: false, hair: 0x2b1a10,
+    shoulder: 0.23, hip: 0.09, torsoW: 0.34, depth: 0.22, chest: true,
+    legR: 0.072, armR: 0.05, handR: 0.03, vArm: 0.03, vHand: 0.03
+  },
+};
+
+// ---------- Seasons ----------
+const SEASONS = {
+  spring: {
+    label: '春', camo: ['#7fae5a', '#a6c97a', '#5e8c46', '#d9c77a', '#9cc27e', '#6f9a52'],
+    vest: 0x3e5a33, bg: 0xcfe9d6, flake: 0xffc4dc, flakeSpeed: 0.6
+  },
+  summer: {
+    label: '夏', camo: ['#8a8f3a', '#b8b463', '#6e7230', '#c9b46a', '#9aa04a', '#5c6626'],
+    vest: 0x4a4f2a, bg: 0x9fd3f0, flake: null, flakeSpeed: 0
+  },
+  autumn: {
+    label: '秋', camo: ['#8a5a2b', '#b87a35', '#5e4124', '#d19a4a', '#7a4e2b', '#9c6a3a'],
+    vest: 0x4a3420, bg: 0xd9a77a, flake: 0xe0712a, flakeSpeed: 0.9
+  },
+  winter: {
+    label: '冬', camo: ['#e8ecef', '#c9d1d6', '#8f9aa3', '#f4f7f9', '#b4bec6', '#dfe5ea'],
+    vest: 0x56606a, bg: 0xc3ced8, flake: 0xffffff, flakeSpeed: 1.2
+  },
+};
+
+// ---------- Civilian outfits per season ----------
+const OUTFITS = {
+  spring: { top: 0xa8d5b5, bottom: 0x4f6486, shoes: 0xf2f2f2 },
+  summer: { top: 0xffffff, bottom: 0xc9b98a, shoes: 0x8a6a4a, shorts: true },
+  autumn: { top: 0x8a5a3a, bottom: 0x3a3530, shoes: 0x5a3a24, scarf: 0xb03a2e },
+  winter: { top: 0xffffff, topTex: null, bottom: 0x1f5a2e, shoes: 0x1b1814, hat: true },
+};
+const MIL_OUTFIT = { top: 0xffffff, bottom: 0x1b1814, shoes: 0x1b1814 };
+
+// ---------- Shop costumes ----------
+const COSTUMES = {
+  default: { label: '標準の服', desc: '季節ごとの普段着', price: 0 },
+  pink:    { label: 'ピンクジャージ', desc: '明るいピンクの上下', price: 20,
+             outfit: { top: 0xff8fb1, topTex: null, bottom: 0xffffff, shoes: 0xffffff } },
+  ops:     { label: '特殊部隊（黒）', desc: '黒い戦術服', price: 30,
+             outfit: { top: 0x1c1f22, topTex: null, bottom: 0x25282c, shoes: 0x111111 } },
+  soldier: { label: '迷彩兵士', desc: '敵と同じ迷彩とヘルメット', price: 50, military: true },
+  gold:    { label: 'ゴールドスーツ', desc: '金色の豪華なスーツ', price: 60,
+             outfit: { top: 0xd4af37, topTex: null, bottom: 0x2a2110, shoes: 0x2a2110 } },
+};
+
+// ---------- Weapons ----------
+// part: [shape('b'=box,'c'=cylinder), dims, material, x, y, z, rx?]  cylinder dims = [radius, length]
+const WEAPONS = {
+  ar: { name: 'アサルトライフル', price: 0, mag: 30, delay: 0.1, dmg: 1, head: 3, reload: 1.4,
+        auto: true, spread: 0, pellets: 1, muzzle: [0, 0.012, -0.61], desc: '標準装備',
+        parts: [
+    ['b', [0.062, 0.085, 0.3], 'darkMetal', 0, 0, 0],
+    ['b', [0.03, 0.012, 0.24], 'darkMetal', 0, 0.05, -0.02],
+    ['b', [0.014, 0.034, 0.014], 'darkMetal', 0, 0.068, -0.2],
+    ['b', [0.04, 0.06, 0.1], 'darkMetal', 0, 0.1, -0.02],
+    ['b', [0.004, 0.04, 0.08], 'lens', 0.021, 0.1, -0.02],
+    ['b', [0.004, 0.04, 0.08], 'lens', -0.021, 0.1, -0.02],
+    ['c', [0.011, 0.36], 'metal', 0, 0.012, -0.36],
+    ['c', [0.007, 0.24], 'metal', 0, 0.04, -0.27],
+    ['c', [0.02, 0.05], 'darkMetal', 0, 0.012, -0.585],
+    ['b', [0.07, 0.065, 0.24], 'tan', 0, -0.005, -0.24],
+    ['b', [0.024, 0.03, 0.2], 'darkMetal', 0, 0.02, 0.26],
+    ['b', [0.05, 0.1, 0.24], 'tan', 0, -0.005, 0.27],
+    ['b', [0.054, 0.12, 0.022], 'polymer', 0, -0.005, 0.39],
+    ['b', [0.04, 0.13, 0.05], 'polymer', 0, -0.11, 0.09, 0.22],
+    ['b', [0.012, 0.03, 0.07], 'polymer', 0, -0.05, 0],
+    ['b', [0.046, 0.17, 0.07], 'polymer', 0, -0.13, -0.04, -0.1],
+  ]},
+  pistol: { name: 'ハンドガン', price: 15, mag: 12, delay: 0.28, dmg: 1, head: 3, reload: 1.0,
+        auto: false, spread: 0.01, pellets: 1, muzzle: [0, 0.02, -0.25], desc: '軽くて扱いやすい',
+        parts: [
+    ['b', [0.04, 0.05, 0.2], 'darkMetal', 0, 0.02, -0.05],
+    ['b', [0.035, 0.05, 0.14], 'polymer', 0, -0.01, 0],
+    ['b', [0.035, 0.14, 0.05], 'polymer', 0, -0.1, 0.05, 0.2],
+    ['c', [0.008, 0.06], 'metal', 0, 0.02, -0.2],
+  ]},
+  smg: { name: 'サブマシンガン', price: 40, mag: 40, delay: 0.065, dmg: 1, head: 2, reload: 1.2,
+        auto: true, spread: 0.03, pellets: 1, muzzle: [0, 0.01, -0.31], desc: '連射が速い',
+        parts: [
+    ['b', [0.06, 0.09, 0.24], 'darkMetal', 0, 0, 0],
+    ['c', [0.009, 0.16], 'metal', 0, 0.01, -0.22],
+    ['b', [0.05, 0.05, 0.1], 'tan', 0, -0.01, -0.15],
+    ['b', [0.04, 0.16, 0.05], 'polymer', 0, -0.12, -0.02, 0.15],
+    ['b', [0.04, 0.12, 0.05], 'polymer', 0, -0.1, 0.07, 0.2],
+    ['b', [0.03, 0.06, 0.12], 'polymer', 0, 0, 0.19],
+    ['b', [0.012, 0.03, 0.012], 'darkMetal', 0, 0.05, -0.25],
+    ['b', [0.02, 0.03, 0.04], 'darkMetal', 0, 0.06, 0.06],
+  ]},
+  shotgun: { name: 'ショットガン', price: 60, mag: 6, delay: 0.8, dmg: 1, head: 1, reload: 2.0,
+        auto: false, spread: 0.07, pellets: 6, muzzle: [0, 0.03, -0.75], desc: '広く散らばる弾',
+        parts: [
+    ['b', [0.07, 0.1, 0.2], 'darkMetal', 0, 0, 0],
+    ['c', [0.018, 0.62], 'metal', 0, 0.03, -0.42],
+    ['c', [0.013, 0.3], 'darkMetal', 0, -0.03, -0.3],
+    ['b', [0.07, 0.05, 0.14], 'tan', 0, -0.06, -0.26],
+    ['b', [0.06, 0.12, 0.3], 'tan', 0, -0.02, 0.24],
+    ['b', [0.04, 0.12, 0.05], 'polymer', 0, -0.11, 0.1, 0.25],
+  ]},
+  sniper: { name: 'スナイパーライフル', price: 80, mag: 5, delay: 1.1, dmg: 3, head: 3, reload: 2.2,
+        auto: false, spread: 0, pellets: 1, muzzle: [0, 0.02, -0.8], desc: '一撃の威力が高い',
+        parts: [
+    ['c', [0.008, 0.6], 'metal', 0, 0.02, -0.45],
+    ['b', [0.055, 0.085, 0.26], 'darkMetal', 0, 0, 0],
+    ['c', [0.022, 0.22], 'darkMetal', 0, 0.09, -0.02],
+    ['b', [0.03, 0.03, 0.08], 'darkMetal', 0, 0.055, -0.02],
+    ['b', [0.05, 0.12, 0.3], 'polymer', 0, -0.01, 0.28],
+    ['b', [0.04, 0.13, 0.05], 'polymer', 0, -0.11, 0.1, 0.22],
+    ['b', [0.04, 0.1, 0.06], 'polymer', 0, -0.11, -0.02],
+  ]},
+};
+
+// ---------- Device detection & settings ----------
+const IS_TOUCH_DEVICE = (() => {
+  const coarse = window.matchMedia && matchMedia('(pointer: coarse)').matches;
+  const ua = /Android|iPhone|iPad|iPod|Mobile/i.test(navigator.userAgent);
+  const ipadOS = navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1;
+  return !!(coarse || ua || ipadOS);
+})();
+const DEVICE_TYPE = IS_TOUCH_DEVICE
+  ? (Math.min(window.screen.width, window.screen.height) >= 600 ? 'タブレット' : 'スマホ')
+  : 'パソコン';
+const DISPLAY_RES = (() => {
+  const dpr = window.devicePixelRatio || 1;
+  return `${Math.round(window.screen.width * dpr)}×${Math.round(window.screen.height * dpr)}`;
+})();
+
+const OPT = {
+  control: ['auto', 'pc', 'touch'],
+  res: ['auto', '50', '75', '100'],
+  fps: ['on', 'off'],
+  optimize: ['on', 'off'],
+  sens: ['0.6', '1', '1.5'],
+  gfx: ['auto', 'ultra', 'high', 'mid', 'low', 'min'],
+  fxCasing: ['on', 'off'],
+  fxBlood: ['on', 'off'],
+  fxSpark: ['on', 'off'],
+  fxTracer: ['on', 'off'],
+  fxFlash: ['on', 'off'],
+  fxFlake: ['on', 'off'],
+};
+const settings = {
+  control: 'auto', res: 'auto', fps: 'on', optimize: 'on', sens: '1',
+  gfx: 'auto', fxCasing: 'on', fxBlood: 'on', fxSpark: 'on', fxTracer: 'on', fxFlash: 'on', fxFlake: 'on',
+};
+const fxOn = k => settings[k] === 'on';
+try {
+  const s = JSON.parse(localStorage.getItem('mfps-settings'));
+  if (s) for (const k in OPT) if (OPT[k].includes(String(s[k]))) settings[k] = String(s[k]);
+} catch (_) {}
+function saveSettings() {
+  try { localStorage.setItem('mfps-settings', JSON.stringify(settings)); } catch (_) {}
+}
+let touchMode = false;
+function resolveControl() {
+  touchMode = settings.control === 'touch' ? true
+    : settings.control === 'pc' ? false
+    : IS_TOUCH_DEVICE;
+}
+
+// ---------- Saved data (localStorage) ----------
+function loadSave() {
+  const d = { coins: 0, costumes: ['default'], weapons: ['ar'], costume: 'default', weapon: 'ar', unlock: false };
+  try {
+    const s = JSON.parse(localStorage.getItem('mfps-save'));
+    if (s && typeof s === 'object') {
+      if (typeof s.coins === 'number' && s.coins >= 0) d.coins = s.coins;
+      if (Array.isArray(s.costumes)) d.costumes = [...new Set(['default', ...s.costumes.filter(k => COSTUMES[k])])];
+      if (Array.isArray(s.weapons)) d.weapons = [...new Set(['ar', ...s.weapons.filter(k => WEAPONS[k])])];
+      if (d.costumes.includes(s.costume)) d.costume = s.costume;
+      if (d.weapons.includes(s.weapon)) d.weapon = s.weapon;
+      if (typeof s.unlock === 'boolean') d.unlock = s.unlock;
+    }
+  } catch (_) {}
+  return d;
+}
+const save = loadSave();
+function persist() {
+  try { localStorage.setItem('mfps-save', JSON.stringify(save)); } catch (_) {}
+}
+function addCoins(n) {
+  save.coins += n;
+  persist();
+}
+
+let skinType = 'male';
+let season = 'summer';
+try {
+  const s1 = localStorage.getItem('mfps-skin');
+  if (SKINS[s1]) skinType = s1;
+  const s2 = localStorage.getItem('mfps-season');
+  if (SEASONS[s2]) season = s2;
+} catch (_) {}
+
+// ---------- Renderer / Scene ----------
+const renderer = new THREE.WebGLRenderer({
+  antialias: !IS_TOUCH_DEVICE,            // スマホは高DPIで十分なのでAAを切って負荷を下げる（読み込み時のみ反映）
+  powerPreference: 'high-performance',
+});
+renderer.outputEncoding = THREE.sRGBEncoding;
+renderer.setClearColor(0x87a6c4, 1);
+document.body.prepend(renderer.domElement);
+renderer.domElement.addEventListener('webglcontextlost', e => {
+  e.preventDefault();
+  showErr('GPUの描画コンテキストが失われました。ページを再読み込みしてください');
+});
+const MAX_ANISO = Math.min(8, renderer.capabilities.getMaxAnisotropy ? renderer.capabilities.getMaxAnisotropy() : 1);
+
+const scene = new THREE.Scene();
+scene.background = new THREE.Color(0x87a6c4);
+scene.fog = new THREE.Fog(0x87a6c4, 16, 90);
+
+const camera = new THREE.PerspectiveCamera(70, innerWidth / innerHeight, 0.02, 200);
+camera.rotation.order = 'YXZ';
+scene.add(camera);
+
+scene.add(new THREE.HemisphereLight(0xdde8ff, 0x3a3328, 0.9));
+const sun = new THREE.DirectionalLight(0xfff1d6, 1.0);
+sun.position.set(10, 20, 10);
+scene.add(sun);
+const gunLight = new THREE.PointLight(0xffffff, 0.8, 2.5, 2);
+gunLight.position.set(0.2, 0.3, 0.2);
+camera.add(gunLight);
+
+// ---------- Shared geometry cache (same shapes are created only once) ----------
+const GCACHE = new Map();
+function cg(kind, ...a) {
+  const key = kind + '|' + a.map(v => (typeof v === 'number' ? v.toFixed(4) : v)).join('|');
+  let g = GCACHE.get(key);
+  if (!g) {
+    if (kind === 'box') g = new THREE.BoxGeometry(...a);
+    else if (kind === 'cyl') g = new THREE.CylinderGeometry(...a);
+    else if (kind === 'sph') g = new THREE.SphereGeometry(...a);
+    else if (kind === 'tor') g = new THREE.TorusGeometry(...a);
+    else if (kind === 'cone') g = new THREE.ConeGeometry(...a);
+    GCACHE.set(key, g);
+  }
+  return g;
+}
+// Merge several static geometries into one (fewer draw calls)
+function mergeGeometries(geos) {
+  let vc = 0, ic = 0;
+  for (const g of geos) { vc += g.attributes.position.count; ic += g.index.count; }
+  const pos = new Float32Array(vc * 3), nor = new Float32Array(vc * 3);
+  const uv = new Float32Array(vc * 2), idx = new Uint32Array(ic);
+  let vo = 0, io = 0;
+  for (const g of geos) {
+    const p = g.attributes.position.array, n = g.attributes.normal.array;
+    const u = g.attributes.uv.array, ix = g.index.array;
+    pos.set(p, vo * 3); nor.set(n, vo * 3); uv.set(u, vo * 2);
+    for (let i = 0; i < ix.length; i++) idx[io + i] = ix[i] + vo;
+    vo += g.attributes.position.count; io += ix.length;
+  }
+  const out = new THREE.BufferGeometry();
+  out.setAttribute('position', new THREE.BufferAttribute(pos, 3));
+  out.setAttribute('normal', new THREE.BufferAttribute(nor, 3));
+  out.setAttribute('uv', new THREE.BufferAttribute(uv, 2));
+  out.setIndex(new THREE.BufferAttribute(idx, 1));
+  return out;
+}
+
+// ---------- Procedural textures ----------
+function makeTex(draw) {
+  const c = document.createElement('canvas');
+  c.width = c.height = 128;
+  draw(c.getContext('2d'), 128);
+  const t = new THREE.CanvasTexture(c);
+  t.wrapS = t.wrapT = THREE.RepeatWrapping;
+  t.anisotropy = MAX_ANISO;
+  return t;
+}
+const wallTex = makeTex((g, s) => {
+  g.fillStyle = '#5a3a28';
+  g.fillRect(0, 0, s, s);
+  for (let y = 0; y < s; y += 32)
+    for (let x = -32; x < s; x += 64) {
+      const off = (y / 32) % 2 ? 32 : 0;
+      g.fillStyle = `hsl(20,45%,${38 + Math.random() * 12}%)`;
+      g.fillRect(x + off + 2, y + 2, 60, 28);
+    }
+});
+const floorTex = makeTex((g, s) => {
+  g.fillStyle = '#5b6170';
+  g.fillRect(0, 0, s, s);
+  for (let i = 0; i < 200; i++) {
+    g.fillStyle = `rgba(255,255,255,${Math.random() * 0.1})`;
+    g.fillRect(Math.random() * s, Math.random() * s, 3, 3);
+  }
+  g.strokeStyle = '#3a3f4a';
+  g.lineWidth = 3;
+  g.strokeRect(0, 0, s, s);
+});
+const CAMO_TEX = {};
+for (const key of Object.keys(SEASONS)) {
+  const cols = SEASONS[key].camo;
+  CAMO_TEX[key] = makeTex((g, s) => {
+    g.fillStyle = cols[0];
+    g.fillRect(0, 0, s, s);
+    for (let i = 0; i < 70; i++) {
+      g.fillStyle = cols[Math.floor(Math.random() * cols.length)];
+      g.beginPath();
+      g.ellipse(Math.random() * s, Math.random() * s,
+        8 + Math.random() * 18, 6 + Math.random() * 12, Math.random() * 3, 0, Math.PI * 2);
+      g.fill();
+    }
+  });
+}
+const flashTex = makeTex((g, s) => {
+  const gr = g.createRadialGradient(s / 2, s / 2, 0, s / 2, s / 2, s / 2);
+  gr.addColorStop(0, 'rgba(255,255,220,1)');
+  gr.addColorStop(0.3, 'rgba(255,190,80,0.9)');
+  gr.addColorStop(1, 'rgba(255,120,0,0)');
+  g.fillStyle = gr;
+  g.fillRect(0, 0, s, s);
+});
+const XMAS_TEX = makeTex((g, s) => {
+  g.fillStyle = '#b3202a';
+  g.fillRect(0, 0, s, s);
+  g.fillStyle = '#f4f4f4';
+  for (let y = 0; y < s; y += 32) g.fillRect(0, y, s, 8);
+});
+const crateTex = makeTex((g, s) => {
+  g.fillStyle = '#4f6236';
+  g.fillRect(0, 0, s, s);
+  g.strokeStyle = '#2f3d1e';
+  g.lineWidth = 6;
+  g.strokeRect(3, 3, s - 6, s - 6);
+  g.fillStyle = '#2b3a1c';
+  g.fillRect(0, 0, s, 10);
+  g.fillRect(0, s - 10, s, 10);
+  g.fillStyle = '#e53935';
+  g.fillRect(s / 2 - 10, s / 2 - 32, 20, 64);
+  g.fillRect(s / 2 - 32, s / 2 - 10, 64, 20);
+});
+OUTFITS.winter.topTex = XMAS_TEX;
+
+// ---------- Static world (merged walls, static floor/ceiling) ----------
+const W = COLS * CELL, D = ROWS * CELL;
+floorTex.repeat.set(W / 4, D / 4);
+const floor = new THREE.Mesh(new THREE.PlaneGeometry(W, D),
+  new THREE.MeshLambertMaterial({ map: floorTex }));
+floor.rotation.x = -Math.PI / 2;
+floor.position.set(W / 2, 0, D / 2);
+floor.updateMatrix(); floor.matrixAutoUpdate = false;
+scene.add(floor);
+const ceil = new THREE.Mesh(new THREE.PlaneGeometry(W, D),
+  new THREE.MeshLambertMaterial({ color: 0x2a2a38 }));
+ceil.rotation.x = Math.PI / 2;
+ceil.position.set(W / 2, WALL_H, D / 2);
+ceil.updateMatrix(); ceil.matrixAutoUpdate = false;
+scene.add(ceil);
+
+const walls = [];
+const wallMat = new THREE.MeshLambertMaterial({ map: wallTex });
+const openCells = [];
+const wallGeos = [];
+for (let r = 0; r < ROWS; r++)
+  for (let c = 0; c < COLS; c++) {
+    if (MAP[r][c] === '#') {
+      const g = new THREE.BoxGeometry(CELL, WALL_H, CELL);
+      g.translate(c * CELL + CELL / 2, WALL_H / 2, r * CELL + CELL / 2);
+      wallGeos.push(g);
+    } else {
+      openCells.push([c, r]);
+    }
+  }
+const wallMesh = new THREE.Mesh(mergeGeometries(wallGeos), wallMat);
+wallMesh.updateMatrix(); wallMesh.matrixAutoUpdate = false;
+scene.add(wallMesh);
+walls.push(wallMesh);
+
+// ---------- Shared materials ----------
+const M = {
+  camo: new THREE.MeshStandardMaterial({ map: CAMO_TEX[season], roughness: 0.95 }),
+  vest: new THREE.MeshStandardMaterial({ color: 0x2c3425, roughness: 0.9 }),
+  helmet: new THREE.MeshStandardMaterial({ color: 0x2a2f22, roughness: 0.55, metalness: 0.3 }),
+  skin: new THREE.MeshStandardMaterial({ color: 0xcf9b72, roughness: 0.75 }),
+  hair: new THREE.MeshStandardMaterial({ color: 0x2b1d12, roughness: 0.8 }),
+  boot: new THREE.MeshStandardMaterial({ color: 0x1b1814, roughness: 0.8 }),
+  eyeW: new THREE.MeshStandardMaterial({ color: 0xf2f2f2, roughness: 0.3 }),
+  pupil: new THREE.MeshStandardMaterial({ color: 0x0a0a0a, roughness: 0.2 }),
+  polymer: new THREE.MeshStandardMaterial({ color: 0x1d1e21, roughness: 0.55 }),
+  tan: new THREE.MeshStandardMaterial({ color: 0x8c7550, roughness: 0.6 }),
+  metal: new THREE.MeshStandardMaterial({ color: 0x55595f, metalness: 0.85, roughness: 0.3 }),
+  darkMetal: new THREE.MeshStandardMaterial({ color: 0x25272b, metalness: 0.7, roughness: 0.4 }),
+  lens: new THREE.MeshStandardMaterial({ color: 0x102010, roughness: 0.1, metalness: 0.2 }),
+  brass: new THREE.MeshStandardMaterial({ color: 0xd1a93a, metalness: 0.9, roughness: 0.28 }),
+  blood: new THREE.MeshStandardMaterial({ color: 0x7a0a0a, roughness: 0.4 }),
+  spark: new THREE.MeshBasicMaterial({ color: 0xffd28a }),
+};
+const flashMat = new THREE.MeshBasicMaterial({
+  map: flashTex, transparent: true, depthWrite: false,
+  blending: THREE.AdditiveBlending, side: THREE.DoubleSide
+});
+const tracerMat = new THREE.LineBasicMaterial({ color: 0xffe9a8, transparent: true, opacity: 0.85 });
+const GEO = {
+  casing: new THREE.CylinderGeometry(0.0055, 0.0055, 0.024, 8),
+  blood: new THREE.SphereGeometry(0.025, 6, 4),
+  spark: new THREE.SphereGeometry(0.01, 4, 3),
+};
+const allyRingGeo = new THREE.RingGeometry(0.3, 0.42, 24);
+const allyRingMat = new THREE.MeshBasicMaterial({ color: 0x4fb3ff, transparent: true, opacity: 0.8,
+  side: THREE.DoubleSide, depthWrite: false });
+
+// ---------- Supply crates & medkits ----------
+const crateMat = new THREE.MeshStandardMaterial({ map: crateTex, roughness: 0.8 });
+const crateGeo = new THREE.BoxGeometry(CRATE_HALF * 2, CRATE_HALF * 1.6, CRATE_HALF * 2);
+const crates = [];
+const medkits = [];
+const medGeo = {
+  box: new THREE.BoxGeometry(0.36, 0.16, 0.26),
+  barH: new THREE.BoxGeometry(0.2, 0.02, 0.06),
+  barV: new THREE.BoxGeometry(0.06, 0.02, 0.2),
+  ring: new THREE.RingGeometry(0.3, 0.42, 24),
+};
+const medMat = {
+  white: new THREE.MeshStandardMaterial({ color: 0xf2f2f2, roughness: 0.6 }),
+  red: new THREE.MeshStandardMaterial({ color: 0xd32f2f, roughness: 0.5 }),
+  glow: new THREE.MeshBasicMaterial({ color: 0x5cff8a, transparent: true, opacity: 0.5,
+    side: THREE.DoubleSide, depthWrite: false }),
+};
+
+function createCrate() {
+  const m = new THREE.Mesh(crateGeo, crateMat);
+  m.visible = false;
+  scene.add(m);
+  const c = { mesh: m, x: 0, z: 0, hp: CRATE_HP, broken: true, respawn: 999 };
+  m.userData.crate = c;
+  crates.push(c);
+  return c;
+}
+function nearCrate(x, z, rad) {
+  for (const c of crates) if (!c.broken && Math.hypot(x - c.x, z - c.z) < rad) return true;
+  return false;
+}
+function findSpot(minPlayerDist, avoidEnemies) {
+  for (let i = 0; i < 120; i++) {
+    const [c, r] = openCells[Math.floor(Math.random() * openCells.length)];
+    const x = c * CELL + CELL / 2, z = r * CELL + CELL / 2;
+    if (Math.hypot(x - player.x, z - player.z) < minPlayerDist) continue;
+    if (nearCrate(x, z, 1.6)) continue;
+    if (avoidEnemies && enemies.some(e => e.alive && Math.hypot(x - e.x, z - e.z) < 2)) continue;
+    return [x, z];
+  }
+  const [c, r] = openCells[0];
+  return [c * CELL + CELL / 2, r * CELL + CELL / 2];
+}
+function placeCrate(c) {
+  const [x, z] = findSpot(8, true);
+  c.x = x; c.z = z;
+  c.hp = CRATE_HP;
+  c.broken = false;
+  c.mesh.position.set(x, CRATE_HALF * 0.8, z);
+  c.mesh.rotation.y = Math.random() * 0.3;
+  c.mesh.updateMatrix();
+  c.mesh.visible = true;
+}
+function addMedkit(x, z) {
+  const g = new THREE.Group();
+  g.add(mesh(medGeo.box, medMat.white, 0, 0.08, 0));
+  g.add(mesh(medGeo.barH, medMat.red, 0, 0.17, 0));
+  g.add(mesh(medGeo.barV, medMat.red, 0, 0.17, 0));
+  g.add(mesh(medGeo.ring, medMat.glow, 0, -0.06, 0, -Math.PI / 2));
+  g.position.set(x, 0.02, z);
+  scene.add(g);
+  medkits.push({ g, x, z, t: MEDKIT_LIFE, bob: Math.random() * 6 });
+}
+function spawnMedkitNear(x, z) {
+  for (let i = 0; i < 8; i++) {
+    const mx = x + (Math.random() - 0.5) * 1.4, mz = z + (Math.random() - 0.5) * 1.4;
+    if (!isWall(Math.floor(mx / CELL), Math.floor(mz / CELL))) { addMedkit(mx, mz); return; }
+  }
+  addMedkit(x, z);
+}
+function removeMedkit(i) {
+  scene.remove(medkits[i].g);
+  medkits.splice(i, 1);
+}
+function clearMedkits() {
+  for (let i = medkits.length - 1; i >= 0; i--) removeMedkit(i);
+}
+function hitCrate(c, p) {
+  c.hp -= 1;
+  hitMarkT = 0.15;
+  beep(500, 0.05, 'square', 0.05);
+  if (fxOn('fxSpark')) {
+    for (let i = 0; i < 6; i++)
+      spawnParticle(GEO.spark, M.tan, p.clone(),
+        V((Math.random() - 0.5) * 2.5, Math.random() * 2, (Math.random() - 0.5) * 2.5), 0.4, 9.8);
+  }
+  if (c.hp <= 0) breakCrate(c);
+}
+function breakCrate(c) {
+  c.broken = true;
+  c.respawn = CRATE_RESPAWN;
+  c.mesh.visible = false;
+  for (let i = 0; i < 2; i++) spawnMedkitNear(c.x, c.z);
+  beep(300, 0.2, 'triangle', 0.08, 200);
+  showToast('補給物資！ 回復アイテムが出現');
+}
+
+// ---------- Falling petals / leaves / snow ----------
+const flakePos = new Float32Array(FLAKE_MAX * 3);
+const flakeGeo = new THREE.BufferGeometry();
+flakeGeo.setAttribute('position', new THREE.BufferAttribute(flakePos, 3));
+const flakeMat = new THREE.PointsMaterial({ size: 0.07, transparent: true, opacity: 0.85, depthWrite: false });
+const flakes = new THREE.Points(flakeGeo, flakeMat);
+flakes.frustumCulled = false;
+scene.add(flakes);
+let flakeCount = 0;           // 画質設定で決まる雪・葉の数
+function resetFlake(i, anywhere) {
+  flakePos[i * 3] = player.x + (Math.random() - 0.5) * 16;
+  flakePos[i * 3 + 1] = anywhere ? Math.random() * 3.6 : 3.6;
+  flakePos[i * 3 + 2] = player.z + (Math.random() - 0.5) * 16;
+}
+function updateFlakes(dt) {
+  if (!flakes.visible) return;
+  const S = SEASONS[season];
+  for (let i = 0; i < flakeCount; i++) {
+    const x = flakePos[i * 3] + 0.3 * dt;
+    const y = flakePos[i * 3 + 1] - S.flakeSpeed * dt;
+    const z = flakePos[i * 3 + 2];
+    if (y < 0 || Math.abs(x - player.x) > 9 || Math.abs(z - player.z) > 9) {
+      resetFlake(i, false);
+    } else {
+      flakePos[i * 3] = x;
+      flakePos[i * 3 + 1] = y;
+    }
+  }
+  flakeGeo.attributes.position.needsUpdate = true;
+}
+
+// ---------- Mesh helpers ----------
+function mesh(geo, mat, x = 0, y = 0, z = 0, rx = 0) {
+  const m = new THREE.Mesh(geo, mat);
+  m.position.set(x, y, z);
+  m.rotation.x = rx;
+  return m;
+}
+function limb(a, b, r, mat, parent) {
+  const dir = new THREE.Vector3().subVectors(b, a);
+  const len = dir.length();
+  const m = new THREE.Mesh(cg('cyl', r, r * 0.9, len, 10), mat);
+  m.position.copy(a).add(b).multiplyScalar(0.5);
+  m.quaternion.setFromUnitVectors(UP, dir.normalize());
+  parent.add(m);
+  return m;
+}
+function disposeMats(mats) {
+  for (const k in mats) mats[k].dispose();
+}
+
+// ---------- Weapon builder (points along -Z) ----------
+function buildWeapon(id) {
+  const def = WEAPONS[id];
+  const g = new THREE.Group();
+  for (const [shape, dims, mk, x, y, z, rx = 0] of def.parts) {
+    if (shape === 'b') g.add(mesh(cg('box', dims[0], dims[1], dims[2]), M[mk], x, y, z, rx));
+    else g.add(mesh(cg('cyl', dims[0], dims[0], dims[1], 16), M[mk], x, y, z, Math.PI / 2));
+  }
+  const muzzle = new THREE.Object3D();
+  muzzle.position.set(def.muzzle[0], def.muzzle[1], def.muzzle[2]);
+  g.add(muzzle);
+  const flash = new THREE.Mesh(new THREE.PlaneGeometry(0.28, 0.28), flashMat);
+  flash.position.set(0, 0, -0.03);
+  flash.visible = false;
+  muzzle.add(flash);
+  return { group: g, muzzle, flash };
+}
+
+// ---------- Humanoid builder (player, enemies and allies) ----------
+// military=true: soldier look (camo, vest, helmet) with a fixed uniform.
+function buildHumanoid(type, military = false, weaponId = 'ar') {
+  const S = SKINS[type];
+  const O = military ? MIL_OUTFIT : { ...OUTFITS[season], ...(COSTUMES[save.costume].outfit || {}) };
+  const root = new THREE.Group();
+  root.rotation.order = 'YXZ';
+  const body = new THREE.Group();
+  root.add(body);
+
+  const std = (color, extra = {}) => new THREE.MeshStandardMaterial({ color, roughness: 0.85, ...extra });
+  const mats = {
+    camo: military ? M.camo.clone() : std(O.top, { map: O.topTex || null }),
+    vest: M.vest.clone(),
+    helmet: M.helmet.clone(),
+    skin: M.skin.clone(),
+    hair: M.hair.clone(),
+    boot: M.boot.clone(),
+    bottom: std(O.bottom),
+    shoe: std(O.shoes),
+    scarf: std(O.scarf || 0x000000),
+    hat: std(0xc0202a),
+    trim: std(0xffffff),
+  };
+  mats.skin.color.setHex(S.skin);
+  mats.hair.color.setHex(S.hair);
+  if (military) {
+    mats.camo.color.setHex(S.uniform);
+    mats.vest.color.setHex(SEASONS[season].vest);
+  }
+
+  const sh = S.shoulder;
+  const legMat = O.shorts ? mats.skin : (military ? mats.camo : mats.bottom);
+
+  // Legs
+  const legs = [];
+  for (const s of [-1, 1]) {
+    const hip = new THREE.Group();
+    hip.position.set(S.hip * s, 0.9, 0);
+    body.add(hip);
+    limb(V(0, 0, 0), V(0, -0.8, 0), S.legR, legMat, hip);
+    if (O.shorts) hip.add(mesh(cg('cyl', S.legR * 1.15, S.legR * 1.15, 0.2, 10), mats.bottom, 0, -0.1, 0));
+    hip.add(mesh(cg('box', 0.17, 0.12, 0.28), military ? mats.boot : mats.shoe, 0, -0.86, 0.04));
+    legs.push(hip);
+  }
+
+  // Torso
+  body.add(mesh(cg('box', S.torsoW, 0.58, S.depth), mats.camo, 0, 1.18, 0));
+  if (S.chest) {
+    for (const s of [-1, 1])
+      body.add(mesh(cg('sph', 0.07, 10, 8), mats.camo, s * 0.075, 1.3, 0.12));
+  }
+  body.add(mesh(cg('box', S.torsoW + 0.02, 0.07, S.depth + 0.03), military ? mats.boot : mats.bottom, 0, 0.9, 0));
+  if (military) {
+    body.add(mesh(cg('box', S.torsoW + 0.02, 0.42, S.depth + 0.02), mats.vest, 0, 1.2, 0.01));
+    body.add(mesh(cg('box', 0.09, 0.08, 0.06), mats.vest, -S.torsoW * 0.3, 1.1, 0.17));
+    body.add(mesh(cg('box', 0.09, 0.08, 0.06), mats.vest, S.torsoW * 0.3, 1.1, 0.17));
+  }
+  if (O.scarf) body.add(mesh(cg('tor', 0.085, 0.03, 8, 16), mats.scarf, 0, 1.47, 0, Math.PI / 2));
+  limb(V(0, 1.44, 0), V(0, 1.54, 0), 0.065, mats.skin, body);
+
+  // Head
+  const head = new THREE.Group();
+  head.position.set(0, 1.67, 0);
+  body.add(head);
+  const face = mesh(cg('sph', 0.13, 16, 12), mats.skin);
+  face.userData.part = 'head';
+  head.add(face);
+  for (const sx of [-1, 1]) {
+    const eye = mesh(cg('sph', 0.028, 8, 6), M.eyeW, sx * 0.05, 0.02, 0.115);
+    eye.userData.part = 'head';
+    const pupil = mesh(cg('sph', 0.014, 6, 5), M.pupil, sx * 0.05, 0.02, 0.137);
+    pupil.userData.part = 'head';
+    head.add(eye, pupil);
+  }
+  if (military) {
+    const helmetM = mesh(cg('sph', 0.165, 16, 10, 0, Math.PI * 2, 0, Math.PI * 0.55), mats.helmet, 0, 0.03, 0);
+    helmetM.userData.part = 'head';
+    head.add(helmetM);
+  } else {
+    const cap = mesh(cg('sph', 0.158, 16, 10, 0, Math.PI * 2, 0, Math.PI * 0.6), mats.hair, 0, 0.03, 0);
+    cap.userData.part = 'head';
+    head.add(cap);
+    if (type === 'female') {
+      const back = mesh(cg('box', 0.27, 0.36, 0.1), mats.hair, 0, -0.1, -0.1);
+      back.userData.part = 'head';
+      const tail = limb(V(0, 0.08, -0.12), V(0, -0.25, -0.22), 0.045, mats.hair, head);
+      tail.userData.part = 'head';
+      head.add(back);
+    }
+    if (O.hat) {
+      const cone = mesh(cg('cone', 0.15, 0.3, 12), mats.hat, 0, 0.3, -0.02, -0.25);
+      const brim = mesh(cg('tor', 0.16, 0.035, 8, 16), mats.trim, 0, 0.17, 0, Math.PI / 2);
+      const pom = mesh(cg('sph', 0.045, 8, 6), mats.trim, 0, 0.46, -0.08);
+      [cone, brim, pom].forEach(p => { p.userData.part = 'head'; head.add(p); });
+    }
+  }
+
+  // Arms holding the weapon
+  limb(V(-sh, 1.4, 0), V(-0.2, 1.18, 0.3), S.armR, mats.camo, body);
+  limb(V(-0.2, 1.18, 0.3), V(0.0, 1.2, 0.17), S.armR * 0.85, mats.camo, body);
+  limb(V(sh, 1.4, 0), V(0.16, 1.2, 0.34), S.armR, mats.camo, body);
+  limb(V(0.16, 1.2, 0.34), V(0.0, 1.26, 0.52), S.armR * 0.85, mats.camo, body);
+  body.add(mesh(cg('sph', S.handR, 8, 6), mats.skin, 0.0, 1.2, 0.17));
+  body.add(mesh(cg('sph', S.handR, 8, 6), mats.skin, 0.0, 1.26, 0.52));
+
+  // Weapon
+  const wpnObj = buildWeapon(weaponId);
+  wpnObj.group.position.set(0, 1.3, 0.25);
+  wpnObj.group.rotation.y = Math.PI;
+  body.add(wpnObj.group);
+
+  root.traverse(o => {
+    if (o.isMesh && o.userData.part === undefined) o.userData.part = 'body';
+  });
+  const meshes = [];
+  root.traverse(o => { if (o.isMesh && o !== wpnObj.flash) meshes.push(o); });
+
+  return {
+    root, body, legs, mats, meshes,
+    muzzle: wpnObj.muzzle, flash: wpnObj.flash,
+    phase: 0, type,
+  };
+}
+
+// ---------- Player: first-person viewmodel ----------
+const camViewRoot = new THREE.Group();
+camera.add(camViewRoot);
+const VM_BASE = V(0.2, -0.2, -0.42);
+camViewRoot.position.copy(VM_BASE);
+let rifleV = null;
+let viewArms = null;
+function buildViewModel() {
+  if (rifleV) camViewRoot.remove(rifleV.group);
+  rifleV = buildWeapon(save.weapon);
+  camViewRoot.add(rifleV.group);
+  buildViewArms();
+}
+function buildViewArms() {
+  if (viewArms && rifleV) rifleV.group.remove(viewArms);
+  const S = SKINS[skinType];
+  const cos = COSTUMES[save.costume];
+  const O = { ...OUTFITS[season], ...(cos.outfit || {}) };
+  const g = new THREE.Group();
+  let sleeve;
+  if (cos.military) {
+    sleeve = M.camo.clone();
+    sleeve.color.setHex(S.uniform);
+  } else {
+    sleeve = new THREE.MeshStandardMaterial({ color: O.top, map: O.topTex || null, roughness: 0.85 });
+  }
+  const skinM = M.skin.clone();
+  skinM.color.setHex(S.skin);
+  limb(V(0.22, -0.45, 0.45), V(0.0, -0.13, 0.09), S.vArm, sleeve, g);
+  limb(V(-0.2, -0.45, 0.1), V(0.0, -0.04, -0.28), S.vArm, sleeve, g);
+  g.add(mesh(cg('sph', S.vHand, 10, 8), skinM, 0.0, -0.13, 0.09));
+  g.add(mesh(cg('sph', S.vHand, 10, 8), skinM, 0.0, -0.04, -0.28));
+  rifleV.group.add(g);
+  viewArms = g;
+}
+
+// ---------- Player: third-person model ----------
+let playerModel = null;
+let thirdPerson = false;
+function buildPlayerModel() {
+  if (playerModel) {
+    scene.remove(playerModel.root);
+    disposeMats(playerModel.mats);
+  }
+  const cos = COSTUMES[save.costume];
+  playerModel = buildHumanoid(skinType, !!cos.military, save.weapon);
+  scene.add(playerModel.root);
+  playerModel.root.visible = thirdPerson;
+}
+
+// ---------- Enemies (soldiers) ----------
+const enemies = [];
+function createEnemy() {
+  const h = buildHumanoid('male', true, 'ar');
+  scene.add(h.root);
+  const e = {
+    root: h.root, body: h.body, legs: h.legs, mats: h.mats, meshes: h.meshes,
+    muzzle: h.muzzle, flash: h.flash,
+    x: 0, z: 0, hp: 3, alive: true, respawn: 0, cool: 0, shootCool: 0,
+    phase: 0, hitT: 0, deadT: 0,
+    wx: 0, wz: 0, wpT: 0, px: 0, pz: 0, stuckT: 1,
+  };
+  h.meshes.forEach(m => { m.userData.enemy = e; });
+  enemies.push(e);
+  return e;
+}
+function rebuildEnemies() {
+  for (const e of enemies) { scene.remove(e.root); disposeMats(e.mats); }
+  enemies.length = 0;
+  for (let i = 0; i < ENEMY_N; i++) createEnemy();
+  enemies.forEach(placeEnemy);
+}
+
+// ---------- Allies (reinforcements) ----------
+const allies = [];
+function spotNear(cx, cz, rad) {
+  for (let i = 0; i < 30; i++) {
+    const x = cx + (Math.random() * 2 - 1) * rad, z = cz + (Math.random() * 2 - 1) * rad;
+    if (canMove(x, z)) return [x, z];
+  }
+  return [cx, cz];
+}
+function spawnAlly() {
+  const h = buildHumanoid('male', true, 'ar');
+  h.mats.vest.color.setHex(0x2c6fb0);
+  const ring = new THREE.Mesh(allyRingGeo, allyRingMat);
+  ring.rotation.x = -Math.PI / 2;
+  ring.position.y = 0.03;
+  h.root.add(ring);
+  scene.add(h.root);
+  const [x, z] = spotNear(player.x, player.z, 3);
+  allies.push({
+    root: h.root, body: h.body, legs: h.legs, mats: h.mats, muzzle: h.muzzle, flash: h.flash, ring,
+    x, z, hp: ALLY_HP, alive: true, deadT: 0, corpseT: 3, shootCool: 0.5, phase: 0,
+  });
+  h.root.position.set(x, 0, z);
+}
+function clearAllies() {
+  for (const a of allies) { scene.remove(a.root); disposeMats(a.mats); }
+  allies.length = 0;
+}
+function findVisibleAlly(e) {
+  let best = null, bd = 25;
+  for (const a of allies) {
+    if (!a.alive) continue;
+    const d = Math.hypot(a.x - e.x, a.z - e.z);
+    if (d < bd && hasLOS(e.x, e.z, a.x, a.z)) { best = a; bd = d; }
+  }
+  return best;
+}
+function damageAlly(a, dmg) {
+  if (!a.alive || gameOver) return;
+  a.hp -= dmg;
+  if (fxOn('fxBlood')) {
+    for (let i = 0; i < 6; i++)
+      spawnParticle(GEO.blood, M.blood, V(a.x, 1.3, a.z),
+        V((Math.random() - 0.5) * 2, Math.random() * 2, (Math.random() - 0.5) * 2), 0.5, 9.8);
+  }
+  if (a.hp <= 0) {
+    a.alive = false;
+    a.deadT = 0;
+    a.ring.visible = false;
+    showToast('味方が倒れた');
+  }
+}
+function allyShoot(a, e) {
+  const from = a.muzzle.getWorldPosition(new THREE.Vector3());
+  const to = V(e.x + (Math.random() - 0.5) * 0.3, 1.2 + (Math.random() - 0.5) * 0.4,
+    e.z + (Math.random() - 0.5) * 0.3);
+  showFlash(a.flash);
+  spawnTracer(from, to);
+  noise(0.06, 0.05);
+  if (Math.random() < 0.6) damageEnemy(e, 1, to, true);
+}
+function updateAllies(dt) {
+  for (let i = allies.length - 1; i >= 0; i--) {
+    const a = allies[i];
+    cullRoot(a.root, a.x, a.z);
+    if (!a.alive) {
+      a.deadT = Math.min(1, a.deadT + dt * 3);
+      a.root.rotation.x = (Math.PI / 2) * a.deadT;
+      a.root.position.set(a.x, 0.12 * a.deadT, a.z);
+      a.corpseT -= dt;
+      if (a.corpseT <= 0) {
+        scene.remove(a.root);
+        disposeMats(a.mats);
+        allies.splice(i, 1);
+      }
+      continue;
+    }
+
+    // Nearest visible enemy
+    let target = null, bd = 25;
+    for (const e of enemies) {
+      if (!e.alive) continue;
+      const d = Math.hypot(e.x - a.x, e.z - a.z);
+      if (d < bd && hasLOS(a.x, a.z, e.x, e.z)) { target = e; bd = d; }
+    }
+
+    // Without a target, rejoin the player when far away
+    const pd = Math.hypot(player.x - a.x, player.z - a.z);
+    if (!target && pd > 14) [a.x, a.z] = spotNear(player.x, player.z, 3);
+
+    let tx = null, tz = 0, speed = 0, stop = 0;
+    if (target) { tx = target.x; tz = target.z; speed = 1.8; stop = 7; }
+    else if (pd > 4) { tx = player.x; tz = player.z; speed = 2.6; stop = 3.5; }
+
+    let moving = false, faceX = 0, faceZ = 0, haveFace = false;
+    if (target) { faceX = target.x - a.x; faceZ = target.z - a.z; haveFace = true; }
+    if (tx !== null) {
+      const dx = tx - a.x, dz = tz - a.z, td = Math.hypot(dx, dz);
+      if (td > stop) {
+        moveWithCollision(a, a.x + dx / td * speed * dt, a.z + dz / td * speed * dt);
+        moving = true;
+        if (!target) { faceX = dx; faceZ = dz; haveFace = true; }
+      }
+    }
+    a.root.position.set(a.x, 0, a.z);
+    if (haveFace) a.root.rotation.y = Math.atan2(faceX, faceZ);
+
+    if (moving) a.phase += dt * 7;
+    const sw = moving ? Math.sin(a.phase) * 0.55 : 0;
+    a.legs[0].rotation.x = sw;
+    a.legs[1].rotation.x = -sw;
+    a.body.position.y = moving ? Math.abs(Math.sin(a.phase)) * 0.035 : 0;
+
+    a.shootCool -= dt;
+    if (target && bd < 22 && a.shootCool <= 0) {
+      a.shootCool = 0.7;
+      allyShoot(a, target);
+    }
+  }
+}
+function callReinforcements() {
+  if (screen !== 'playing' || gameOver) return;
+  if (reinfCD > 0) { showToast(`増援まであと ${Math.ceil(reinfCD)} 秒`); return; }
+  if (save.coins < REINF_COST) { showToast('コインが足りません'); return; }
+  if (allies.filter(a => a.alive).length + REINF_N > ALLY_MAX) { showToast('味方の上限です'); return; }
+  save.coins -= REINF_COST;
+  persist();
+  for (let i = 0; i < REINF_N; i++) spawnAlly();
+  reinfCD = REINF_CD;
+  showToast('増援が到着！');
+  beep(600, 0.15, 'triangle', 0.08, 300);
+}
+
+// Hide characters that are far away (saves draw calls)
+function cullRoot(root, x, z) {
+  root.visible = Math.hypot(player.x - x, player.z - z) < CULL_D;
+}
+
+// ---------- Game state ----------
+const player = { x: 0, z: 0, yaw: 0, pitch: 0, hp: 100, ammo: 30, score: 0, kills: 0, runCoins: 0 };
+const START = [1, 1];
+let gameOver = false, reloadT = 0, fireCool = 0, hitMarkT = 0, hurtT = 0, recoil = 0, kick = 0, bobT = 0;
+let toastT = 0, reinfCD = 0, mmAcc = 0;
+let screen = 'home';
+let locked = false;           // PC: pointer lock state
+let mouseHeld = false;
+let touchFire = false;        // touch: fire button held
+let homeNote = '';
+
+function wpn() { return WEAPONS[save.weapon]; }
+function isPlaying() { return screen === 'playing' && !gameOver && (touchMode || locked); }
+
+function canMove(x, z) {
+  for (const dx of [-R, R])
+    for (const dz of [-R, R])
+      if (isWall(Math.floor((x + dx) / CELL), Math.floor((z + dz) / CELL))) return false;
+  for (const c of crates) {
+    if (!c.broken && Math.abs(x - c.x) < CRATE_HALF + R && Math.abs(z - c.z) < CRATE_HALF + R) return false;
+  }
+  return true;
+}
+function moveWithCollision(obj, nx, nz) {
+  if (canMove(nx, obj.z)) obj.x = nx;
+  if (canMove(obj.x, nz)) obj.z = nz;
+}
+function hasLOS(x1, z1, x2, z2) {
+  const d = Math.hypot(x2 - x1, z2 - z1);
+  const n = Math.max(1, Math.ceil(d / 0.25));
+  for (let i = 1; i < n; i++) {
+    const t = i / n;
+    const x = x1 + (x2 - x1) * t, z = z1 + (z2 - z1) * t;
+    if (isWall(Math.floor(x / CELL), Math.floor(z / CELL))) return false;
+  }
+  return true;
+}
+
+function placeEnemy(e) {
+  const [x, z] = findSpot(12, false);
+  e.x = x; e.z = z;
+  e.px = x; e.pz = z;
+  e.wx = x; e.wz = z; e.wpT = 0; e.stuckT = 1;
+  e.hp = 3; e.alive = true; e.cool = 0; e.respawn = 0;
+  e.shootCool = 1 + Math.random() * 2;
+  e.deadT = 0; e.hitT = 0;
+  e.root.rotation.x = 0;
+  e.root.position.set(e.x, 0, e.z);
+}
+function pickWaypoint(e) {
+  for (let i = 0; i < 20; i++) {
+    const a = Math.random() * Math.PI * 2, dist = 2 + Math.random() * 5;
+    const wx = e.x + Math.cos(a) * dist, wz = e.z + Math.sin(a) * dist;
+    if (!isWall(Math.floor(wx / CELL), Math.floor(wz / CELL)) && hasLOS(e.x, e.z, wx, wz)) {
+      e.wx = wx; e.wz = wz; e.wpT = 4;
+      return;
+    }
+  }
+  e.wx = e.x; e.wz = e.z; e.wpT = 1;
+}
+
+function resetGame() {
+  Object.assign(player, {
+    x: START[0] * CELL + CELL / 2, z: START[1] * CELL + CELL / 2,
+    yaw: 0, pitch: 0, hp: 100, ammo: wpn().mag, score: 0, kills: 0, runCoins: 0
+  });
+  reloadT = 0; gameOver = false; fireCool = 0; reinfCD = 0;
+  clearMedkits();
+  clearAllies();
+  crates.forEach(placeCrate);
+  enemies.forEach(placeEnemy);
+}
+
+// ---------- Audio ----------
+let actx = null;
+function ensureAudio() {
+  if (!actx) {
+    try { actx = new (window.AudioContext || window.webkitAudioContext)(); } catch (_) {}
+  }
+}
+function beep(freq, dur, type = 'square', vol = 0.1, slide = 0) {
+  if (!actx) return;
+  const o = actx.createOscillator(), g = actx.createGain();
+  const t = actx.currentTime;
+  o.type = type;
+  o.frequency.setValueAtTime(freq, t);
+  if (slide) o.frequency.exponentialRampToValueAtTime(Math.max(20, freq + slide), t + dur);
+  g.gain.setValueAtTime(vol, t);
+  g.gain.exponentialRampToValueAtTime(0.001, t + dur);
+  o.connect(g).connect(actx.destination);
+  o.start(t); o.stop(t + dur);
+}
+function noise(dur = 0.15, vol = 0.3) {
+  if (!actx) return;
+  const len = Math.floor(actx.sampleRate * dur);
+  const buf = actx.createBuffer(1, len, actx.sampleRate);
+  const d = buf.getChannelData(0);
+  for (let i = 0; i < len; i++) d[i] = (Math.random() * 2 - 1) * (1 - i / len);
+  const s = actx.createBufferSource(), g = actx.createGain();
+  s.buffer = buf; g.gain.value = vol;
+  s.connect(g).connect(actx.destination);
+  s.start();
+}
+
+// ---------- Effects (capped particle pool) ----------
+const particles = [];
+function removeParticle(p) {
+  scene.remove(p.o);
+  if (p.o.geometry && p.o.geometry.userData.own) p.o.geometry.dispose();
+}
+function pushParticle(o, vel, t, g) {
+  while (particles.length >= MAX_PARTICLES) removeParticle(particles.shift());
+  particles.push({ o, vel, t, g });
+  scene.add(o);
+}
+function spawnParticle(geo, mat, pos, vel, life, grav = 9.8) {
+  const m = new THREE.Mesh(geo, mat);
+  m.position.copy(pos);
+  pushParticle(m, vel, life, grav);
+}
+function spawnTracer(a, b) {
+  if (!fxOn('fxTracer')) return;
+  const geo = new THREE.BufferGeometry().setFromPoints([a, b]);
+  geo.userData.own = true;
+  pushParticle(new THREE.Line(geo, tracerMat), null, 0.05, 0);
+}
+function updateParticles(dt) {
+  for (let i = particles.length - 1; i >= 0; i--) {
+    const p = particles[i];
+    p.t -= dt;
+    if (p.vel) {
+      p.vel.y -= p.g * dt;
+      p.o.position.addScaledVector(p.vel, dt);
+      p.o.rotation.x += dt * 12;
+      if (p.o.position.y < 0.02) {
+        p.o.position.y = 0.02;
+        p.vel.y *= -0.3;
+        p.vel.x *= 0.6; p.vel.z *= 0.6;
+      }
+    }
+    if (p.t <= 0) {
+      removeParticle(p);
+      particles.splice(i, 1);
+    }
+  }
+}
+function showFlash(m) {
+  if (!fxOn('fxFlash')) return;
+  m.visible = true;
+  m.rotation.z = Math.random() * Math.PI * 2;
+  m.userData.t = 0.045;
+}
+function updateFlashes(dt) {
+  const list = [rifleV.flash, playerModel.flash, ...enemies.map(e => e.flash), ...allies.map(a => a.flash)];
+  for (const f of list) {
+    if (!f.visible) continue;
+    f.userData.t -= dt;
+    if (f.userData.t <= 0) f.visible = false;
+  }
+}
+function impactSparks(p) {
+  if (!fxOn('fxSpark')) return;
+  for (let i = 0; i < 6; i++)
+    spawnParticle(GEO.spark, M.spark, p.clone(),
+      V((Math.random() - 0.5) * 3, Math.random() * 2.5, (Math.random() - 0.5) * 3), 0.25, 9.8);
+}
+
+// ---------- DOM refs ----------
+const overlay = document.getElementById('overlay');
+const panelEl = document.getElementById('panel');
+const hudEl = document.getElementById('hud');
+const touchUI = document.getElementById('touchUI');
+const crossEl = document.getElementById('cross');
+const missionEl = document.getElementById('mission');
+const missFillEl = document.getElementById('missFill');
+const coinValEl = document.getElementById('coinVal');
+const ammoEl = document.getElementById('ammo');
+const weaponNameEl = document.getElementById('weaponName');
+const reloadTagEl = document.getElementById('reloadTag');
+const statusEl = document.getElementById('statusBox');
+const fpsEl = document.getElementById('fpsBox');
+const hurtEl = document.getElementById('hurt');
+const hpbar = document.getElementById('hpbar');
+const hptext = document.getElementById('hptext');
+const toastEl = document.getElementById('toast');
+const mmCanvas = document.getElementById('minimap');
+mmCanvas.width = COLS * MM_S;
+mmCanvas.height = ROWS * MM_S;
+const mmCtx = mmCanvas.getContext('2d');
+const mmBase = document.createElement('canvas');
+mmBase.width = mmCanvas.width;
+mmBase.height = mmCanvas.height;
+(function drawMinimapBase() {
+  const g = mmBase.getContext('2d');
+  g.fillStyle = '#1a2330';
+  g.fillRect(0, 0, mmBase.width, mmBase.height);
+  for (let r = 0; r < ROWS; r++)
+    for (let c = 0; c < COLS; c++)
+      if (MAP[r][c] === '#') {
+        g.fillStyle = '#5a6578';
+        g.fillRect(c * MM_S, r * MM_S, MM_S, MM_S);
+      }
+})();
+
+// Write text only when it changes (avoids DOM work every frame)
+function setT(el, v) { if (el._v !== v) { el._v = v; el.textContent = v; } }
+function setH(el, v) { if (el._v !== v) { el._v = v; el.innerHTML = v; } }
+
+let hpShown = -1;
+function updateHpBar() {
+  const pct = clamp(player.hp, 0, 100);
+  if (pct === hpShown) return;
+  hpShown = pct;
+  hpbar.style.width = pct + '%';
+  hpbar.style.background = pct > 50 ? '#3ddc4a' : pct > 25 ? '#f0c419' : '#e53935';
+  hptext.textContent = `HP ${player.hp} / 100`;
+}
+
+function showToast(text) {
+  toastEl.textContent = text;
+  toastEl.style.opacity = '1';
+  toastT = 1.8;
+}
+function reload() {
+  if (reloadT > 0 || player.ammo === wpn().mag) return;
+  reloadT = wpn().reload;
+  beep(400, 0.05, 'square', 0.04);
+}
+function killEnemy(e, byAlly = false) {
+  e.alive = false;
+  e.respawn = 4;
+  e.deadT = 0;
+  player.kills++;
+  if (byAlly) {
+    showToast('味方が敵を撃破');
+  } else {
+    player.score += 100;
+    player.runCoins += KILL_COIN;
+    addCoins(KILL_COIN);
+  }
+  if (player.kills >= WIN_KILLS && !gameOver) {
+    player.runCoins += WIN_COIN;
+    addCoins(WIN_COIN);
+    endRun('win');
+  }
+}
+function damageEnemy(e, dmg, p, byAlly = false) {
+  if (!e.alive || gameOver) return;
+  e.hp -= dmg;
+  e.hitT = 0.12;
+  if (!byAlly) {
+    hitMarkT = 0.15;
+    beep(900, 0.06, 'square', 0.06);
+  }
+  if (fxOn('fxBlood')) {
+    for (let i = 0; i < 8; i++)
+      spawnParticle(GEO.blood, M.blood, p.clone(),
+        V((Math.random() - 0.5) * 2, Math.random() * 2, (Math.random() - 0.5) * 2), 0.6, 9.8);
+  }
+  if (e.hp <= 0) killEnemy(e, byAlly);
+}
+function damagePlayer(d) {
+  if (gameOver) return;
+  player.hp = Math.max(0, player.hp - d);
+  hurtT = 0.3;
+  beep(120, 0.25, 'sawtooth', 0.12, -60);
+  updateHpBar();
+  if (player.hp <= 0) endRun('over');
+}
+function enemyShoot(e, target) {
+  const from = e.muzzle.getWorldPosition(new THREE.Vector3());
+  const to = V(target.x + (Math.random() - 0.5) * 1.0, 1.45 + (Math.random() - 0.5) * 0.4,
+    target.z + (Math.random() - 0.5) * 1.0);
+  showFlash(e.flash);
+  spawnTracer(from, to);
+  noise(0.08, 0.08);
+  if (Math.random() < 0.45) {
+    if (target === player) damagePlayer(8);
+    else damageAlly(target, 1);
+  }
+}
+
+function shoot() {
+  if (screen !== 'playing' || gameOver || fireCool > 0 || reloadT > 0) return;
+  const def = wpn();
+  if (player.ammo <= 0) { reload(); return; }
+  player.ammo--;
+  fireCool = def.delay;
+  recoil = 0.05;
+  kick = 1;
+  showFlash(rifleV.flash);
+  showFlash(playerModel.flash);
+  noise(0.12, 0.3);
+  beep(def.pellets > 1 ? 110 : 160, 0.08, 'sawtooth', 0.04, -100);
+
+  // Ejected casing
+  if (fxOn('fxCasing')) {
+    const ejPos = rifleV.group.localToWorld(V(0.04, 0.02, 0.0));
+    const right0 = V(1, 0, 0).applyQuaternion(camera.quaternion);
+    const up0 = V(0, 1, 0).applyQuaternion(camera.quaternion);
+    const vel = right0.multiplyScalar(1.2 + Math.random() * 0.6)
+      .add(up0.multiplyScalar(1.4 + Math.random() * 0.8));
+    spawnParticle(GEO.casing, M.brass, ejPos, vel, 1.6, 9.8);
+  }
+
+  // Ballistics: one ray per pellet (shotgun fires several)
+  camera.updateMatrixWorld();
+  const origin = camera.getWorldPosition(new THREE.Vector3());
+  const fwd = camera.getWorldDirection(new THREE.Vector3());
+  const right = new THREE.Vector3().crossVectors(fwd, UP).normalize();
+  const upv = new THREE.Vector3().crossVectors(right, fwd).normalize();
+  const muzzleObj = thirdPerson ? playerModel.muzzle : rifleV.muzzle;
+  const muzzleW = muzzleObj.getWorldPosition(new THREE.Vector3());
+
+  const aliveMeshes = [];
+  for (const e of enemies) if (e.alive) aliveMeshes.push(...e.meshes);
+  const crateMeshes = crates.filter(c => !c.broken).map(c => c.mesh);
+
+  let firstEnd = null;
+  for (let p = 0; p < def.pellets; p++) {
+    const dir = fwd.clone()
+      .addScaledVector(right, (Math.random() - 0.5) * 2 * def.spread)
+      .addScaledVector(upv, (Math.random() - 0.5) * 2 * def.spread)
+      .normalize();
+    raycaster.set(origin, dir);
+    const hitsE = raycaster.intersectObjects(aliveMeshes, false);
+    const hitsC = raycaster.intersectObjects(crateMeshes, false);
+    const hitsW = raycaster.intersectObjects(walls, false);
+    const wallDist = hitsW.length ? hitsW[0].distance : Infinity;
+    const eDist = hitsE.length ? hitsE[0].distance : Infinity;
+    const cDist = hitsC.length ? hitsC[0].distance : Infinity;
+    let endP;
+    if (eDist < wallDist && eDist <= cDist) {
+      const h = hitsE[0];
+      endP = h.point;
+      const dmg = h.object.userData.part === 'head' ? def.head : def.dmg;
+      damageEnemy(h.object.userData.enemy, dmg, h.point);
+    } else if (cDist < wallDist) {
+      const h = hitsC[0];
+      endP = h.point;
+      hitCrate(h.object.userData.crate, h.point);
+    } else if (hitsW.length) {
+      endP = hitsW[0].point;
+      if (p === 0) impactSparks(endP);
+    } else {
+      endP = raycaster.ray.at(60, new THREE.Vector3());
+    }
+    if (p === 0) firstEnd = endP;
+  }
+  spawnTracer(muzzleW, firstEnd);
+  updateHpBar();
+}
+const raycaster = new THREE.Raycaster();
+
+// ---------- Touch controls ----------
+const stickZone = document.getElementById('stickZone');
+const lookZone = document.getElementById('lookZone');
+const stickBase = document.getElementById('stickBase');
+const stickKnob = document.getElementById('stickKnob');
+const touchStick = { x: 0, y: 0 };
+let stickId = null, stickX0 = 0, stickY0 = 0;
+let lookId = null, lookX = 0, lookY = 0;
+
+function resetTouch() {
+  stickId = null; touchStick.x = 0; touchStick.y = 0;
+  stickBase.style.display = 'none';
+  lookId = null;
+  touchFire = false;
+}
+stickZone.addEventListener('pointerdown', e => {
+  if (stickId !== null || !isPlaying()) return;
+  stickId = e.pointerId;
+  stickZone.setPointerCapture(e.pointerId);
+  const r = stickZone.getBoundingClientRect();
+  stickX0 = e.clientX; stickY0 = e.clientY;
+  stickBase.style.left = (e.clientX - r.left) + 'px';
+  stickBase.style.top = (e.clientY - r.top) + 'px';
+  stickBase.style.display = 'block';
+  stickKnob.style.transform = 'translate(0px, 0px)';
+  e.preventDefault();
+});
+stickZone.addEventListener('pointermove', e => {
+  if (e.pointerId !== stickId) return;
+  let vx = (e.clientX - stickX0) / STICK_R, vy = (e.clientY - stickY0) / STICK_R;
+  const m = Math.hypot(vx, vy);
+  if (m > 1) { vx /= m; vy /= m; }
+  touchStick.x = vx; touchStick.y = vy;
+  stickKnob.style.transform = `translate(${vx * STICK_R}px, ${vy * STICK_R}px)`;
+});
+const endStick = e => {
+  if (e.pointerId !== stickId) return;
+  stickId = null; touchStick.x = 0; touchStick.y = 0;
+  stickBase.style.display = 'none';
+};
+stickZone.addEventListener('pointerup', endStick);
+stickZone.addEventListener('pointercancel', endStick);
+
+function applyLook(dx, dy, k) {
+  const s = parseFloat(settings.sens) * k;
+  player.yaw -= dx * s;
+  player.pitch = clamp(player.pitch - dy * s, -1.4, 1.4);
+}
+lookZone.addEventListener('pointerdown', e => {
+  if (lookId !== null || !isPlaying()) return;
+  lookId = e.pointerId;
+  lookX = e.clientX; lookY = e.clientY;
+  lookZone.setPointerCapture(e.pointerId);
+});
+lookZone.addEventListener('pointermove', e => {
+  if (e.pointerId !== lookId) return;
+  const dx = e.clientX - lookX, dy = e.clientY - lookY;
+  lookX = e.clientX; lookY = e.clientY;
+  applyLook(dx, dy, TOUCH_LOOK);
+});
+const endLook = e => { if (e.pointerId === lookId) lookId = null; };
+lookZone.addEventListener('pointerup', endLook);
+lookZone.addEventListener('pointercancel', endLook);
+
+const fireEl = document.getElementById('tFire');
+fireEl.addEventListener('pointerdown', e => {
+  e.preventDefault();
+  if (!isPlaying()) return;
+  touchFire = true;
+  fireEl.setPointerCapture(e.pointerId);
+  shoot();
+});
+const fireUp = () => { touchFire = false; };
+fireEl.addEventListener('pointerup', fireUp);
+fireEl.addEventListener('pointercancel', fireUp);
+
+function tapButton(id, fn) {
+  document.getElementById(id).addEventListener('pointerdown', e => {
+    e.preventDefault();
+    if (screen === 'playing') fn();
+  });
+}
+tapButton('tReload', reload);
+tapButton('tSwap', () => { if (!gameOver && save.weapons.length > 1) cycleWeapon(); });
+tapButton('tView', () => setView(!thirdPerson));
+tapButton('tReinf', callReinforcements);
+tapButton('tPause', pauseGame);
+
+// ---------- Run flow ----------
+function setScreen(s) {
+  screen = s;
+  if (s !== 'playing') { mouseHeld = false; resetTouch(); }
+  renderOverlay();
+}
+function pauseGame() {
+  setScreen('pause');
+}
+function endRun(s) {
+  gameOver = true;
+  mouseHeld = false;
+  resetTouch();
+  screen = s;
+  if (s === 'win') {
+    save.unlock = true;
+    persist();
+  }
+  if (document.pointerLockElement) document.exitPointerLock();
+  renderOverlay();
+}
+function requestLockOrPause() {
+  if (touchMode) return;
+  const p = renderer.domElement.requestPointerLock();
+  if (p && p.catch) p.catch(() => setScreen('pause'));
+  setTimeout(() => { if (!locked && screen === 'playing') setScreen('pause'); }, 400);
+}
+function enterFullscreenLandscape() {
+  try {
+    const el = document.documentElement;
+    if (el.requestFullscreen && !document.fullscreenElement) el.requestFullscreen().catch(() => {});
+    // 注意: ここの screen は画面状態の変数。画面の向きは window.screen を使う
+    if (window.screen.orientation && window.screen.orientation.lock)
+      window.screen.orientation.lock('landscape').catch(() => {});
+  } catch (_) {}
+}
+function startMission() {
+  ensureAudio();
+  homeNote = '';
+  resetGame();
+  adaptCD = 6; slowT = 0; fastT = 0;
+  setScreen('playing');
+  if (touchMode) enterFullscreenLandscape();
+  else requestLockOrPause();
+}
+function resumeMission() {
+  setScreen('playing');
+  if (!touchMode) requestLockOrPause();
+}
+function goHome() {
+  mouseHeld = false;
+  homeNote = '';
+  resetTouch();
+  if (document.pointerLockElement) document.exitPointerLock();
+  setScreen('home');
+}
+function cycleWeapon() {
+  const list = save.weapons;
+  const i = list.indexOf(save.weapon);
+  save.weapon = list[(i + 1) % list.length];
+  persist();
+  reloadT = 0;
+  player.ammo = wpn().mag;
+  applyLoadout();
+}
+function applyLoadout() {
+  buildPlayerModel();
+  buildViewModel();
+  updateHpBar();
+  renderOverlay();
+}
+
+// ---------- Shop ----------
+function buy(kind, id) {
+  const item = kind === 'costume' ? COSTUMES[id] : WEAPONS[id];
+  const list = kind === 'costume' ? save.costumes : save.weapons;
+  if (list.includes(id) || save.coins < item.price) return;
+  save.coins -= item.price;
+  list.push(id);
+  persist();
+  renderOverlay();
+}
+function equip(kind, id) {
+  if (kind === 'costume') save.costume = id;
+  else { save.weapon = id; player.ammo = wpn().mag; reloadT = 0; }
+  persist();
+  applyLoadout();
+}
+
+// ---------- Skin, season & view ----------
+function setSkin(type) {
+  if (!SKINS[type]) return;
+  skinType = type;
+  try { localStorage.setItem('mfps-skin', type); } catch (_) {}
+  buildPlayerModel();
+  buildViewArms();
+  renderOverlay();
+}
+function setSeason(s) {
+  if (!SEASONS[s]) return;
+  season = s;
+  try { localStorage.setItem('mfps-season', s); } catch (_) {}
+  M.camo.map = CAMO_TEX[s];
+  M.camo.needsUpdate = true;
+  applyEnv();
+  buildPlayerModel();
+  buildViewModel();
+  rebuildEnemies();
+  clearAllies();
+  renderOverlay();
+}
+function applyEnv() {
+  const S = SEASONS[season];
+  scene.background.setHex(S.bg);
+  scene.fog.color.setHex(S.bg);
+  renderer.setClearColor(S.bg, 1);
+  flakeMat.color.setHex(S.flake || 0xffffff);
+  refreshFlakes();
+  if (S.flake) for (let i = 0; i < FLAKE_MAX; i++) resetFlake(i, true);
+}
+function setView(third) {
+  thirdPerson = third;
+  camViewRoot.visible = !third;
+  if (playerModel) playerModel.root.visible = third;
+}
+
+// ---------- Resolution & GPU adaptation ----------
+let dynMult = 1;          // 自動モード時の描画倍率（0.5〜1.0）
+let curPR = 1;
+let adaptCD = 0, slowT = 0, fastT = 0;
+const BASE_PR = () => Math.min(window.devicePixelRatio || 1, gfx.prCap);
+function effMult() {
+  if (settings.res === 'auto') return dynMult;
+  return ({ '50': 0.5, '75': 0.75, '100': 1 })[settings.res] || 1;
+}
+function applyResolution(force) {
+  const pr = Math.round(clamp(BASE_PR() * effMult(), 0.5, 2) * 100) / 100;
+  if (!force && Math.abs(pr - curPR) < 0.01) return;
+  curPR = pr;
+  renderer.setPixelRatio(pr);
+  renderer.setSize(innerWidth, innerHeight);
+  camera.aspect = innerWidth / innerHeight;
+  camera.updateProjectionMatrix();
+}
+// 画質の段階を反映する（描画距離・粒子・雪・霧・解像度）
+function resolveGfxKey() {
+  if (settings.gfx === 'auto') return touchMode ? 'low' : 'mid';
+  return GFX_PRESETS[settings.gfx] ? settings.gfx : 'mid';
+}
+function refreshFlakes() {
+  const on = !!SEASONS[season].flake && fxOn('fxFlake') && flakeCount > 0;
+  flakes.visible = on;
+  flakes.geometry.setDrawRange(0, flakeCount);
+}
+function applyGfx() {
+  gfxKey = resolveGfxKey();
+  gfx = GFX_PRESETS[gfxKey];
+  CULL_D = gfx.cull;
+  MAX_PARTICLES = gfx.parts;
+  flakeCount = gfx.flakes;
+  scene.fog.near = gfx.fog[0];
+  scene.fog.far = gfx.fog[1];
+  refreshFlakes();
+  dynMult = 1;
+  applyResolution(true);
+}
+// Auto mode: lower resolution when the frame rate is low, raise it again when there is headroom
+function adaptQuality(fps) {
+  if (settings.optimize !== 'on' || settings.res !== 'auto') return;
+  if (adaptCD > 0) { adaptCD -= 0.5; return; }
+  if (fps < 50) { slowT += 0.5; fastT = 0; }
+  else if (fps > 56) { fastT += 0.5; slowT = 0; }
+  else { slowT = 0; fastT = 0; }
+  if (slowT >= 2.5 && dynMult > 0.5) {
+    dynMult = Math.max(0.5, +(dynMult - 0.125).toFixed(3));
+    slowT = 0; adaptCD = 3;
+    applyResolution(true);
+  } else if (fastT >= 8 && dynMult < 1) {
+    dynMult = Math.min(1, +(dynMult + 0.125).toFixed(3));
+    fastT = 0; adaptCD = 4;
+    applyResolution(true);
+  }
+}
+function applySetting(k, v) {
+  if (!OPT[k] || !OPT[k].includes(v)) return;
+  settings[k] = v;
+  saveSettings();
+  if (k === 'control') resolveControl();
+  if (k === 'control' || k === 'res' || k === 'optimize' || k === 'gfx' || k === 'fxFlake') applyGfx();
+  renderOverlay();
+}
+
+// ---------- FPS measurement (real frame intervals) ----------
+const frameRing = new Float32Array(FRAME_N);
+let frameRn = 0;
+let winMs = 0, winFrames = 0;
+const stats = { fps: 0, ms: 0, low: 0 };
+function statsTick() {
+  stats.fps = winFrames * 1000 / winMs;
+  stats.ms = winMs / winFrames;
+  const n = Math.min(frameRn, FRAME_N);
+  const arr = Array.prototype.slice.call(frameRing, 0, n).sort((a, b) => a - b);
+  const worst = arr[Math.min(arr.length - 1, Math.floor(arr.length * 0.99))];
+  stats.low = worst ? 1000 / worst : stats.fps;
+  winMs = 0; winFrames = 0;
+}
+function fpsText() {
+  const modeTxt = settings.res === 'auto' ? `自動 ×${curPR.toFixed(2)}` : `${settings.res}%`;
+  return `${stats.fps.toFixed(1)} FPS　${stats.ms.toFixed(1)} ms　1%低 ${stats.low.toFixed(0)}<br>` +
+    `DC ${renderer.info.render.calls}　描画 ${renderer.domElement.width}×${renderer.domElement.height}（${modeTxt}）　画質 ${gfx.label}`;
+}
+
+// ---------- Hidden command (unlocked by winning a mission) ----------
+const CHEAT = ['ArrowUp', 'ArrowUp', 'ArrowDown', 'ArrowDown', 'ArrowLeft', 'ArrowRight', 'ArrowLeft', 'ArrowRight', 'KeyB', 'KeyA'];
+let cheatBuf = [];
+function handleCheat(code) {
+  cheatBuf.push(code);
+  if (cheatBuf.length > CHEAT.length) cheatBuf.shift();
+  if (cheatBuf.length < CHEAT.length || !cheatBuf.every((c, i) => c === CHEAT[i])) return;
+  cheatBuf = [];
+  if (!save.unlock) return;
+  save.unlock = false;
+  addCoins(SECRET_COINS);
+  homeNote = `隠しコマンドを確認しました。コインを ${SECRET_COINS.toLocaleString()} 獲得`;
+  renderOverlay();
+}
+
+// ---------- UI ----------
+const HINT_PC = 'WASD 移動 ／ マウス 視点 ／ 左クリック 射撃（連射武器は長押し）<br>R リロード ／ E 武器切替 ／ G 増援要請（' + REINF_COST + 'コイン・' + REINF_CD + '秒おき） ／ V 一人称・三人称 ／ ESC 一時停止<br>1・2 男性・女性 ／ 3〜6 春・夏・秋・冬';
+const HINT_TOUCH = '左下のスティックで移動 ／ 右側をスワイプで視点 ／ 「撃つ」長押しで連射<br>R リロード ／ E 武器切替 ／ G 増援 ／ V 視点 ／ II 一時停止';
+function hintText() { return touchMode ? HINT_TOUCH : HINT_PC; }
+
+function B(act, label, { val = '', cls = '', dis = false, key = '' } = {}) {
+  return `<button class="btn ${cls}" data-act="${act}" data-val="${esc(val)}" data-key="${esc(key)}"${dis ? ' disabled' : ''}>${label}</button>`;
+}
+function optRow(title, desc, key, opts) {
+  return `<div class="setrow">
+    <div><b>${title}</b><div class="sub" style="font-size:12px">${desc}</div></div>
+    <div class="seg">${opts.map(([v, l]) => B('set', l, { key, val: v, cls: settings[key] === v ? 'sel' : '' })).join('')}</div>
+  </div>`;
+}
+
+const PANELS = {
+  home() {
+    const portrait = touchMode && window.innerHeight > window.innerWidth;
+    const row = (label, act, list, key = '') => `
+      <div class="setrow" style="border:none;padding:6px 0">
+        <span class="sub" style="min-width:64px">${label}</span>
+        <div class="seg">${list.map(([val, txt, on]) => B(act, txt, { val, key, cls: on ? 'sel' : '' })).join('')}</div>
+      </div>`;
+    return `
+      <div class="card">
+        <div style="font-size:30px;font-weight:900;letter-spacing:.04em">MINI FPS</div>
+        <p class="sub">敵を${WIN_KILLS}体倒すとクリア。倒すたびにコインがもらえます。</p>
+        <p class="sub" style="font-size:12px">${DEVICE_TYPE}・${touchMode ? 'タッチ操作' : 'キーボードとマウス'}・${DISPLAY_RES}</p>
+        ${portrait ? '<p class="sub" style="color:var(--warn)">横向きでプレイするとボタンが押しやすくなります</p>' : ''}
+        ${homeNote ? `<p class="sub" style="color:var(--gold2)">${esc(homeNote)}</p>` : ''}
+        <p class="sub" style="margin-top:10px">所持コイン：<b style="color:var(--gold2)">${fmt(save.coins)}</b></p>
+
+        <div class="divider"></div>
+        ${row('操作', 'set', [
+          ['auto', '自動', settings.control === 'auto'],
+          ['pc', 'キーボード・マウス', settings.control === 'pc'],
+          ['touch', 'タッチ', settings.control === 'touch']], 'control')}
+        ${row('兵士', 'gender', [['male', '男性', skinType === 'male'], ['female', '女性', skinType === 'female']])}
+        ${row('季節', 'season', Object.keys(SEASONS).map(k => [k, SEASONS[k].label, season === k]))}
+        <p class="sub" style="font-size:13px;margin-top:8px">
+          装備：${esc(SKINS[skinType].label)}・${esc(SEASONS[season].label)}・${esc(COSTUMES[save.costume].label)}・${esc(wpn().name)}
+        </p>
+
+        <div class="optrow" style="margin-top:18px">
+          ${B('start', 'ミッション開始', { cls: 'primary big' })}
+          ${B('shop', 'アイテムショップ', { cls: 'big' })}
+          ${B('settings', '設定', { cls: 'big' })}
+        </div>
+
+        <div class="divider"></div>
+        <p class="sub" style="font-size:12px">${hintText()}</p>
+      </div>`;
+  },
+  settings() {
+    return `
+      <div class="card">
+        <div class="eyebrow">SETTINGS</div>
+        <h2>設定</h2>
+        <p class="sub">端末：${DEVICE_TYPE}　ディスプレイ：${DISPLAY_RES}　（設定は自動で保存されます）</p>
+        ${optRow('操作方法', '端末に合わせて自動で選びます', 'control', [
+          ['auto', '自動'], ['pc', 'キーボード・マウス'], ['touch', 'タッチ']])}
+        ${optRow('画質', '自動は端末に合わせて選びます。下の段階ほど軽くなります', 'gfx', [
+          ['auto', '自動'], ['ultra', 'ウルトラ'], ['high', '高'], ['mid', '中'], ['low', '低'], ['min', '最小']])}
+        ${optRow('解像度', '自動は端末のディスプレイに合わせて、重いときは自動で下げます', 'res', [
+          ['auto', '自動'], ['50', '50%'], ['75', '75%'], ['100', '100%（最大2倍）']])}
+        ${optRow('GPU自動最適化', '解像度が「自動」のとき、フレームレートに合わせて描画を調整します', 'optimize', [
+          ['on', 'オン'], ['off', 'オフ']])}
+        ${optRow('FPS表示', '画面左上に平均FPS・フレーム時間などを表示します', 'fps', [
+          ['on', '表示'], ['off', '非表示']])}
+        ${optRow('視点の感度', 'マウス・タッチの視点操作の速さ', 'sens', [
+          ['0.6', 'ゆっくり'], ['1', '標準'], ['1.5', '速い']])}
+
+        <div class="section-h"><span>エフェクト</span></div>
+        ${optRow('薬莢', '撃ったときに飛び出す薬莢', 'fxCasing', [['on', '表示'], ['off', '停止']])}
+        ${optRow('血しぶき', '敵や味方に当たったときの表示', 'fxBlood', [['on', '表示'], ['off', '停止']])}
+        ${optRow('火花', '壁や補給箱に当たったときの火花', 'fxSpark', [['on', '表示'], ['off', '停止']])}
+        ${optRow('弾道の線', '弾が飛ぶ軌跡の線', 'fxTracer', [['on', '表示'], ['off', '停止']])}
+        ${optRow('マズルフラッシュ', '銃口の光', 'fxFlash', [['on', '表示'], ['off', '停止']])}
+        ${optRow('雪・葉', '季節ごとに舞う雪・花びら・葉', 'fxFlake', [['on', '表示'], ['off', '停止']])}
+
+        <div class="optrow">${B('home', 'ホームへ戻る', { cls: 'big' })}</div>
+      </div>`;
+  },
+  pause() {
+    return `
+      <div class="card">
+        <div class="eyebrow">PAUSED</div>
+        <h1 class="title">PAUSE</h1>
+        <p class="sub">ミッション中</p>
+        <div class="optrow">
+          ${B('resume', '再開', { cls: 'primary big' })}
+          ${B('home', 'ホームへ', { cls: 'big' })}
+        </div>
+        <div class="divider"></div>
+        <p class="sub" style="font-size:12px">${hintText()}</p>
+      </div>`;
+  },
+  over() {
+    return `
+      <div class="card">
+        <div class="eyebrow">MISSION FAILED</div>
+        <h1 class="title">GAME OVER</h1>
+        <div class="grid2">
+          <div class="slot"><div class="k">スコア</div><div class="v">${player.score}</div></div>
+          <div class="slot"><div class="k">撃破</div><div class="v">${player.kills}</div></div>
+          <div class="slot"><div class="k">獲得コイン</div><div class="v" style="color:var(--gold2)">+${fmt(player.runCoins)}</div></div>
+          <div class="slot"><div class="k">所持コイン</div><div class="v" style="color:var(--gold2)">${fmt(save.coins)}</div></div>
+        </div>
+        <div class="optrow">
+          ${B('retry', 'もう一度', { cls: 'primary big' })}
+          ${B('home', 'ホームへ', { cls: 'big' })}
+        </div>
+      </div>`;
+  },
+  win() {
+    return `
+      <div class="card">
+        <div class="eyebrow">MISSION COMPLETE</div>
+        <h1 class="title">CLEAR</h1>
+        <div class="grid2">
+          <div class="slot"><div class="k">スコア</div><div class="v">${player.score}</div></div>
+          <div class="slot"><div class="k">撃破</div><div class="v">${player.kills}</div></div>
+          <div class="slot"><div class="k">獲得コイン（クリア報酬 +${WIN_COIN} 含む）</div><div class="v" style="color:var(--gold2)">+${fmt(player.runCoins)}</div></div>
+          <div class="slot"><div class="k">所持コイン</div><div class="v" style="color:var(--gold2)">${fmt(save.coins)}</div></div>
+        </div>
+        <div class="optrow">
+          ${B('retry', 'もう一度', { cls: 'primary big' })}
+          ${B('home', 'ホームへ', { cls: 'big' })}
+        </div>
+      </div>`;
+  },
+  shop() {
+    const costumeCards = Object.keys(COSTUMES).map(id => {
+      const c = COSTUMES[id];
+      const owned = save.costumes.includes(id);
+      const eq = save.costume === id;
+      const btn = owned
+        ? B('equipSkin', eq ? '装備中' : '装備', { val: id, cls: eq ? 'sel' : '' })
+        : B('buySkin', `購入 ${c.price} コイン`, { val: id, dis: save.coins < c.price });
+      const tags = `${eq ? '<span class="tag eq">装備中</span>' : owned ? '<span class="tag own">所持</span>' : ''}`;
+      return `<div class="item ${owned ? 'owned' : ''} ${eq ? 'equipped' : ''}">
+        ${tags}
+        <div class="nm">${esc(c.label)}</div>
+        <div class="ds">${esc(c.desc)}</div>
+        ${!owned ? `<div class="price">${c.price} コイン</div>` : ''}
+        <div class="act">${btn}</div>
+      </div>`;
+    }).join('');
+
+    const bar = (v, max) => `<div class="bar"><i style="width:${Math.round(v / max * 100)}%"></i></div>`;
+    const weaponCards = Object.keys(WEAPONS).map(id => {
+      const w = WEAPONS[id];
+      const owned = save.weapons.includes(id);
+      const eq = save.weapon === id;
+      const btn = owned
+        ? B('equipWeapon', eq ? '装備中' : '装備', { val: id, cls: eq ? 'sel' : '' })
+        : B('buyWeapon', `購入 ${w.price} コイン`, { val: id, dis: save.coins < w.price });
+      const tags = `${eq ? '<span class="tag eq">装備中</span>' : owned ? '<span class="tag own">所持</span>' : ''}`;
+      return `<div class="item ${owned ? 'owned' : ''} ${eq ? 'equipped' : ''}">
+        ${tags}
+        <div class="nm">${esc(w.name)}</div>
+        <div class="ds">${esc(w.desc)}</div>
+        <div class="stat"><span>威力</span>${bar(w.dmg, 3)}</div>
+        <div class="stat"><span>弾数</span>${bar(w.mag, 40)}</div>
+        <div class="stat"><span>連射</span>${bar(w.auto ? 1 : 0, 1)}</div>
+        ${!owned ? `<div class="price">${w.price} コイン</div>` : ''}
+        <div class="act">${btn}</div>
+      </div>`;
+    }).join('');
+
+    return `
+      <div class="card">
+        <div class="shopHead">
+          <div>
+            <div class="eyebrow">ARMORY</div>
+            <h2>アイテムショップ</h2>
+          </div>
+          <div class="coinsBig"><span>所持コイン</span><b>${fmt(save.coins)}</b></div>
+        </div>
+        <div class="section-h"><span>スキン（服）</span></div>
+        <div class="cards">${costumeCards}</div>
+        <div class="section-h"><span>武器</span></div>
+        <div class="cards">${weaponCards}</div>
+        <div class="optrow"><button class="btn big" data-act="home">ホームへ戻る</button></div>
+      </div>`;
+  },
+};
+
+function renderOverlay() {
+  const playing = screen === 'playing';
+  overlay.style.display = playing ? 'none' : 'flex';
+  hudEl.style.display = playing ? 'block' : 'none';
+  touchUI.style.display = playing && touchMode ? 'block' : 'none';
+  fpsEl.style.display = playing && settings.fps === 'on' ? 'block' : 'none';
+  if (playing) return;
+  panelEl.innerHTML = PANELS[screen]();
+}
+
+overlay.addEventListener('click', e => {
+  const b = e.target.closest('button[data-act]');
+  if (!b || b.disabled) return;
+  const act = b.dataset.act, val = b.dataset.val;
+  switch (act) {
+    case 'start': startMission(); break;
+    case 'resume': resumeMission(); break;
+    case 'retry': startMission(); break;
+    case 'home': goHome(); break;
+    case 'shop': setScreen('shop'); break;
+    case 'settings': setScreen('settings'); break;
+    case 'set': applySetting(b.dataset.key, val); break;
+    case 'gender': setSkin(val); break;
+    case 'season': setSeason(val); break;
+    case 'buySkin': buy('costume', val); break;
+    case 'equipSkin': equip('costume', val); break;
+    case 'buyWeapon': buy('weapon', val); break;
+    case 'equipWeapon': equip('weapon', val); break;
+  }
+});
+
+// ---------- Keyboard & mouse (PC) ----------
+document.addEventListener('pointerlockchange', () => {
+  locked = document.pointerLockElement === renderer.domElement;
+  if (!locked && screen === 'playing' && !touchMode) {
+    mouseHeld = false;
+    setScreen('pause');
+  }
+});
+document.addEventListener('mousemove', e => {
+  if (!locked || touchMode) return;
+  applyLook(e.movementX, e.movementY, MOUSE_LOOK);
+});
+document.addEventListener('mousedown', () => {
+  if (!locked || touchMode) return;
+  mouseHeld = true;
+  shoot();
+});
+document.addEventListener('mouseup', () => { mouseHeld = false; });
+document.addEventListener('visibilitychange', () => {
+  if (document.hidden && screen === 'playing') setScreen('pause');
+});
+
+const keys = {};
+const SEASON_KEYS = { Digit3: 'spring', Digit4: 'summer', Digit5: 'autumn', Digit6: 'winter' };
+document.addEventListener('keydown', e => {
+  keys[e.code] = true;
+  if (screen === 'home') handleCheat(e.code);
+  if (e.code === 'KeyR' && screen === 'playing') reload();
+  if (e.code === 'KeyE' && screen === 'playing' && !gameOver && save.weapons.length > 1) cycleWeapon();
+  if (e.code === 'KeyG' && screen === 'playing') callReinforcements();
+  if (e.code === 'KeyV' && !e.repeat && screen === 'playing') setView(!thirdPerson);
+  if (e.code === 'Digit1') setSkin('male');
+  if (e.code === 'Digit2') setSkin('female');
+  if (SEASON_KEYS[e.code]) setSeason(SEASON_KEYS[e.code]);
+});
+document.addEventListener('keyup', e => { keys[e.code] = false; });
+
+// ---------- Update ----------
+function updatePlayer(dt) {
+  const speed = 5 * dt;
+  let f = 0, s = 0;
+  if (keys.KeyW) f += 1;
+  if (keys.KeyS) f -= 1;
+  if (keys.KeyD) s += 1;
+  if (keys.KeyA) s -= 1;
+  f += -touchStick.y;   // スティックの上 = 前進
+  s += touchStick.x;
+  const mag = Math.hypot(f, s);
+  if (mag < 0.001) return;
+  const m = Math.min(1, mag);
+  const inv = 1 / mag;
+  const fx = -Math.sin(player.yaw), fz = -Math.cos(player.yaw);
+  const rx = Math.cos(player.yaw), rz = -Math.sin(player.yaw);
+  const mx = (fx * f + rx * s) * inv, mz = (fz * f + rz * s) * inv;
+  moveWithCollision(player, player.x + mx * speed * m, player.z + mz * speed * m);
+}
+
+function updateEnemies(dt) {
+  for (const e of enemies) {
+    const dd = Math.hypot(player.x - e.x, player.z - e.z);
+    e.root.visible = dd < CULL_D;
+    if (!e.alive) {
+      e.respawn -= dt;
+      e.deadT = Math.min(1, e.deadT + dt * 3);
+      e.root.rotation.x = (Math.PI / 2) * e.deadT;
+      e.root.position.set(e.x, 0.12 * e.deadT, e.z);
+      if (e.respawn <= 0) placeEnemy(e);
+      continue;
+    }
+
+    const dx = player.x - e.x, dz = player.z - e.z;
+    const d = dd;
+    const sees = d < 30 && hasLOS(e.x, e.z, player.x, player.z);
+    const ally = sees ? null : findVisibleAlly(e);
+
+    // Chase the player if visible, otherwise chase a visible ally, otherwise wander
+    let tx, tz, speed, stop;
+    if (sees) {
+      tx = player.x; tz = player.z; speed = 1.5; stop = 2.5;
+      e.wpT = 0;
+    } else if (ally) {
+      tx = ally.x; tz = ally.z; speed = 1.2; stop = 4;
+      e.wpT = 0;
+    } else {
+      e.wpT -= dt;
+      if (e.wpT <= 0 || Math.hypot(e.wx - e.x, e.wz - e.z) < 0.2) pickWaypoint(e);
+      tx = e.wx; tz = e.wz; speed = 0.9; stop = 0.25;
+    }
+    const tdx = tx - e.x, tdz = tz - e.z, td = Math.hypot(tdx, tdz);
+    const moving = td > stop;
+    if (moving) {
+      const sp = speed * dt;
+      moveWithCollision(e, e.x + tdx / td * sp, e.z + tdz / td * sp);
+      e.phase += dt * (sees ? 7 : 5);
+    }
+
+    // Stuck detection while wandering
+    e.stuckT -= dt;
+    if (e.stuckT <= 0) {
+      if (!sees && !ally && Math.hypot(e.x - e.px, e.z - e.pz) < 0.15) e.wpT = 0;
+      e.px = e.x; e.pz = e.z; e.stuckT = 1;
+    }
+
+    e.root.position.set(e.x, 0, e.z);
+    if (td > 0.01) e.root.rotation.y = Math.atan2(tdx, tdz);
+
+    const sw = moving ? Math.sin(e.phase) * 0.55 : 0;
+    e.legs[0].rotation.x = sw;
+    e.legs[1].rotation.x = -sw;
+    e.body.position.y = moving ? Math.abs(Math.sin(e.phase)) * 0.035 : 0;
+
+    e.hitT = Math.max(0, e.hitT - dt);
+    const glow = e.hitT > 0 ? 0.5 : 0;
+    for (const m of Object.values(e.mats)) m.emissive.setRGB(glow, 0, 0);
+
+    e.shootCool -= dt;
+    e.cool -= dt;
+    const target = sees ? player : ally;
+    if (target) {
+      const tD = Math.hypot(target.x - e.x, target.z - e.z);
+      if (tD > 2 && tD < (sees ? 20 : 18) && e.shootCool <= 0) {
+        e.shootCool = 1.1 + Math.random() * 0.9;
+        enemyShoot(e, target);
+      }
+    }
+    if (d < 1.4 && e.cool <= 0) {
+      e.cool = 1;
+      damagePlayer(12);
+    }
+  }
+}
+
+function updateCrates(dt) {
+  for (const c of crates) {
+    if (c.broken) {
+      c.respawn -= dt;
+      if (c.respawn <= 0) placeCrate(c);
+    }
+  }
+}
+
+function updateMedkits(dt) {
+  for (let i = medkits.length - 1; i >= 0; i--) {
+    const m = medkits[i];
+    m.t -= dt;
+    m.bob += dt * 3;
+    m.g.rotation.y += dt * 1.2;
+    m.g.position.y = 0.02 + Math.sin(m.bob) * 0.03;
+    const near = Math.hypot(player.x - m.x, player.z - m.z) < 1.0;
+    if (near && player.hp < 100) {
+      const before = player.hp;
+      player.hp = Math.min(100, player.hp + MEDKIT_HEAL);
+      showToast(`回復 +${player.hp - before}`);
+      beep(700, 0.12, 'triangle', 0.08, 300);
+      removeMedkit(i);
+      updateHpBar();
+    } else if (m.t <= 0) {
+      removeMedkit(i);
+    }
+  }
+}
+
+function drawMinimap() {
+  const s = MM_S;
+  const px = x => x / CELL * s, pz = z => z / CELL * s;
+  mmCtx.drawImage(mmBase, 0, 0);
+  for (const c of crates) {
+    if (c.broken) continue;
+    mmCtx.fillStyle = '#ffd24a';
+    mmCtx.fillRect(px(c.x) - 3, pz(c.z) - 3, 6, 6);
+  }
+  mmCtx.fillStyle = '#6dff9a';
+  for (const m of medkits) {
+    mmCtx.beginPath(); mmCtx.arc(px(m.x), pz(m.z), 2.5, 0, Math.PI * 2); mmCtx.fill();
+  }
+  mmCtx.fillStyle = '#ff5a5a';
+  for (const e of enemies) {
+    if (!e.alive) continue;
+    mmCtx.beginPath(); mmCtx.arc(px(e.x), pz(e.z), 2.5, 0, Math.PI * 2); mmCtx.fill();
+  }
+  mmCtx.fillStyle = '#5fb3ff';
+  for (const a of allies) {
+    if (!a.alive) continue;
+    mmCtx.beginPath(); mmCtx.arc(px(a.x), pz(a.z), 2.5, 0, Math.PI * 2); mmCtx.fill();
+  }
+  const x0 = px(player.x), z0 = pz(player.z);
+  mmCtx.strokeStyle = '#ffffff';
+  mmCtx.lineWidth = 2;
+  mmCtx.beginPath();
+  mmCtx.moveTo(x0, z0);
+  mmCtx.lineTo(x0 - Math.sin(player.yaw) * 9, z0 - Math.cos(player.yaw) * 9);
+  mmCtx.stroke();
+  mmCtx.fillStyle = '#ffffff';
+  mmCtx.beginPath(); mmCtx.arc(x0, z0, 3.5, 0, Math.PI * 2); mmCtx.fill();
+}
+
+function update(dt) {
+  fireCool -= dt;
+  if (reloadT > 0) {
+    reloadT -= dt;
+    if (reloadT <= 0) { reloadT = 0; player.ammo = wpn().mag; }
+  }
+  if (hitMarkT > 0) hitMarkT -= dt;
+  if (hurtT > 0) hurtT -= dt;
+  if (recoil > 0) recoil -= dt;
+  if (reinfCD > 0) reinfCD = Math.max(0, reinfCD - dt);
+  if (toastT > 0) {
+    toastT -= dt;
+    if (toastT <= 0) toastEl.style.opacity = '0';
+  }
+  kick = Math.max(0, kick - dt * 14);
+
+  if ((mouseHeld || touchFire) && wpn().auto) shoot();
+
+  updatePlayer(dt);
+  updateEnemies(dt);
+  updateAllies(dt);
+  updateCrates(dt);
+  updateMedkits(dt);
+  updateParticles(dt);
+  updateFlashes(dt);
+  updateFlakes(dt);
+
+  const stickMoving = Math.abs(touchStick.x) + Math.abs(touchStick.y) > 0.1;
+  const moving = stickMoving || !!(keys.KeyW || keys.KeyA || keys.KeyS || keys.KeyD);
+  if (moving) bobT += dt * 9;
+
+  // First-person weapon: bob, reload tilt, recoil
+  const bobY = moving ? Math.sin(bobT) * 0.008 : 0;
+  const bobX = moving ? Math.cos(bobT * 0.5) * 0.006 : 0;
+  const reloadP = reloadT > 0 ? 1 - reloadT / wpn().reload : 0;
+  const rl = Math.sin(reloadP * Math.PI);
+  camViewRoot.position.set(
+    VM_BASE.x + bobX,
+    VM_BASE.y + bobY - rl * 0.09 + kick * 0.01,
+    VM_BASE.z + kick * 0.04
+  );
+  rifleV.group.rotation.set(kick * 0.07, 0, rl * 0.35);
+
+  // Third-person model
+  const pm = playerModel;
+  pm.root.position.set(player.x, 0, player.z);
+  pm.root.rotation.y = player.yaw + Math.PI;
+  pm.root.visible = thirdPerson;
+  if (moving) pm.phase += dt * 7;
+  const psw = moving ? Math.sin(pm.phase) * 0.55 : 0;
+  pm.legs[0].rotation.x = psw;
+  pm.legs[1].rotation.x = -psw;
+  pm.body.position.y = moving ? Math.abs(Math.sin(pm.phase)) * 0.035 : 0;
+
+  // Camera
+  if (thirdPerson) {
+    const fx = -Math.sin(player.yaw), fz = -Math.cos(player.yaw);
+    const rx = Math.cos(player.yaw), rz = -Math.sin(player.yaw);
+    let d = 2.6;
+    while (d > 0.8 && isWall(Math.floor((player.x - fx * d) / CELL), Math.floor((player.z - fz * d) / CELL)))
+      d -= 0.1;
+    camera.position.set(player.x - fx * d + rx * 0.45, 1.85, player.z - fz * d + rz * 0.45);
+  } else {
+    camera.position.set(player.x, 1.6 + (moving ? Math.sin(bobT) * 0.012 : 0), player.z);
+  }
+  camera.rotation.set(player.pitch + Math.max(0, recoil) * 2, player.yaw, 0);
+
+  // HUD (text is written only when it changes)
+  crossEl.classList.toggle('hit', hitMarkT > 0);
+  hurtEl.style.background = hurtT > 0 ? `rgba(255,0,0,${Math.max(0, hurtT) * 1.2})` : 'transparent';
+  setT(missionEl, `撃破 ${player.kills} / ${WIN_KILLS}　SCORE ${player.score}`);
+  missFillEl.style.width = clamp(player.kills / WIN_KILLS * 100, 0, 100) + '%';
+  setT(coinValEl, fmt(save.coins));
+  setH(ammoEl, `${player.ammo}<small> / ${wpn().mag}</small>`);
+  setT(weaponNameEl, wpn().name);
+  setT(reloadTagEl, reloadT > 0 ? 'RELOADING…' : '');
+  const aliveAllies = allies.filter(a => a.alive).length;
+  setT(statusEl, `${SKINS[skinType].label} ・ ${SEASONS[season].label} ・ ${thirdPerson ? '三人称' : '一人称'}　味方 ${aliveAllies}　増援[G] ${reinfCD > 0 ? Math.ceil(reinfCD) + '秒' : '準備OK'}（${REINF_COST}コイン）　今回のコイン +${fmt(player.runCoins)}`);
+  mmAcc += dt;
+  if (mmAcc >= 0.066) { mmAcc = 0; drawMinimap(); }
+  updateHpBar();
+}
+
+// ---------- Init ----------
+resolveControl();
+applyGfx();
+for (let i = 0; i < CRATE_N; i++) createCrate();
+M.camo.map = CAMO_TEX[season];
+applyEnv();
+buildPlayerModel();
+buildViewModel();
+setView(false);
+rebuildEnemies();
+resetGame();
+renderOverlay();
+
+// ---------- Loop ----------
+let last = performance.now();
+let menuAcc = 0;
+let loopErrShown = false;
+function loop(now) {
+  requestAnimationFrame(loop);
+  const raw = now - last;
+  last = now;
+  const dt = Math.min(Math.max(raw, 0) / 1000, 0.05);
+  if (raw > 0 && raw < 1000) {
+    frameRing[frameRn % FRAME_N] = raw;
+    frameRn++;
+    winMs += raw;
+    winFrames++;
+  }
+  try {
+    if (isPlaying()) update(dt);
+
+    if (winMs >= 500) {
+      statsTick();
+      if (screen === 'playing') {
+        adaptQuality(stats.fps);
+        if (settings.fps === 'on') setH(fpsEl, fpsText());
+      }
+    }
+
+    // Menus only need an occasional redraw of the background
+    if (screen === 'playing') {
+      renderer.render(scene, camera);
+    } else {
+      menuAcc += dt;
+      if (menuAcc >= 0.1) { menuAcc = 0; renderer.render(scene, camera); }
+    }
+  } catch (err) {
+    if (!loopErrShown) {
+      loopErrShown = true;
+      showErr('LOOP ERROR: ' + (err && err.stack || err));
+    }
+  }
+}
+requestAnimationFrame(loop);
+
+addEventListener('resize', () => applyResolution(true));
+}
+
+// ---------- Start ----------
+try {
+  main();
+} catch (err) {
+  showErr('START ERROR: ' + (err && err.stack || err));
+  document.getElementById('overlay').style.display = 'flex';
+}
+</script>
+</body>
+</html>
