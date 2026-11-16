@@ -1862,10 +1862,10 @@ function optRow(title, desc, key, opts) {
 const PANELS = {
   home() {
     const portrait = touchMode && window.innerHeight > window.innerWidth;
-    const btnRow = (label, key, list) => `
+    const row = (label, act, list, key = '') => `
       <div class="setrow" style="border:none;padding:6px 0">
         <span class="sub" style="min-width:64px">${label}</span>
-        <div class="seg">${list.map(([val, txt, on]) => B(key, txt, { val, cls: on ? 'sel' : '' })).join('')}</div>
+        <div class="seg">${list.map(([val, txt, on]) => B(act, txt, { val, key, cls: on ? 'sel' : '' })).join('')}</div>
       </div>`;
     return `
       <div class="card">
@@ -1877,8 +1877,12 @@ const PANELS = {
         <p class="sub" style="margin-top:10px">所持コイン：<b style="color:var(--gold2)">${fmt(save.coins)}</b></p>
 
         <div class="divider"></div>
-        ${btnRow('兵士', 'gender', [['male', '男性', skinType === 'male'], ['female', '女性', skinType === 'female']])}
-        ${btnRow('季節', 'season', Object.keys(SEASONS).map(k => [k, SEASONS[k].label, season === k]))}
+        ${row('操作', 'set', [
+          ['auto', '自動', settings.control === 'auto'],
+          ['pc', 'キーボード・マウス', settings.control === 'pc'],
+          ['touch', 'タッチ', settings.control === 'touch']], 'control')}
+        ${row('兵士', 'gender', [['male', '男性', skinType === 'male'], ['female', '女性', skinType === 'female']])}
+        ${row('季節', 'season', Object.keys(SEASONS).map(k => [k, SEASONS[k].label, season === k]))}
         <p class="sub" style="font-size:13px;margin-top:8px">
           装備：${esc(SKINS[skinType].label)}・${esc(SEASONS[season].label)}・${esc(COSTUMES[save.costume].label)}・${esc(wpn().name)}
         </p>
