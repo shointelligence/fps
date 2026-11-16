@@ -118,6 +118,14 @@ h2{font-size:24px;margin:4px 0 0;font-weight:800;letter-spacing:.05em}
 .seg{display:flex;gap:8px;flex-wrap:wrap}
 .seg .btn{min-width:88px}
 
+/* 画質選択画面の大きなボタン（縦一列） */
+.gfxlist{display:flex;flex-direction:column;gap:10px;margin-top:14px}
+.gfxopt{display:flex;justify-content:space-between;align-items:center;gap:12px;width:100%;min-width:0;
+  text-align:left;padding:14px 16px;font-size:16px}
+.gfxopt b{font-size:17px;white-space:nowrap}
+.gfxopt span{font-size:12px;color:var(--sub);font-weight:400;line-height:1.5;text-align:right}
+.gfxopt.sel span{color:var(--gold2)}
+
 /* ---------- Shop ---------- */
 .shopHead{display:flex;justify-content:space-between;align-items:flex-end;gap:16px;flex-wrap:wrap}
 .cards{display:grid;grid-template-columns:repeat(auto-fill,minmax(250px,1fr));gap:12px;margin-top:6px}
@@ -149,6 +157,7 @@ h2{font-size:24px;margin:4px 0 0;font-weight:800;letter-spacing:.05em}
   .loadout{grid-template-columns:1fr 1fr}
   .seg .btn{min-width:0;flex:1 1 auto;padding:10px 10px;font-size:14px}
   .btn.big{min-width:0;flex:1 1 40%;font-size:17px;padding:13px 16px}
+  .gfxopt{padding:12px 14px}
   #hpBox{width:52vw}
   #ammoBox{min-width:0}
   #missionBox{min-width:0;max-width:52vw}
@@ -162,6 +171,8 @@ h2{font-size:24px;margin:4px 0 0;font-weight:800;letter-spacing:.05em}
   .setrow{padding:7px 0}
   .divider{margin:10px 0}
   .sub{margin-top:3px}
+  .gfxlist{gap:6px;margin-top:8px}
+  .gfxopt{padding:9px 14px}
 }
 </style>
 </head>
@@ -1197,6 +1208,7 @@ let gameOver = false, reloadT = 0, fireCool = 0, hitMarkT = 0, hurtT = 0, recoil
 let toastT = 0, reinfCD = 0, mmAcc = 0;
 let screen = 'home';
 let settingsBack = 'home';    // 設定画面の「戻る」先（home / pause）
+let gfxFrom = 'home';         // 画質選択画面の「戻る」先
 let locked = false;           // PC: pointer lock state
 let mouseHeld = false;
 let touchFire = false;        // touch: fire button held
@@ -1678,6 +1690,19 @@ function startMission() {
   if (touchMode) enterFullscreenLandscape();
   else requestLockOrPause();
 }
+// ミッション開始・もう一度の前に、画質を選ぶ画面を出す
+function askGfxThenStart(from) {
+  gfxFrom = from;
+  setScreen('gfxpick');
+}
+// 画質を決めてからミッションを始める
+function chooseGfxAndStart(val) {
+  if (!OPT.gfx.includes(val)) return;
+  settings.gfx = val;
+  saveSettings();
+  applyGfx();
+  startMission();
+}
 function resumeMission() {
   setScreen('playing');
   if (!touchMode) requestLockOrPause();
@@ -1913,6 +1938,34 @@ const PANELS = {
         <p class="sub" style="font-size:12px">${hintText()}</p>
       </div>`;
   },
+  gfxpick() {
+    const cur = settings.gfx;
+    const autoKey = resolveGfxKey();
+    const opts = [
+      ['ultra', 'ウルトラ', '一番きれい。新しめのパソコン向け'],
+      ['high', '高', 'きれい。多くのパソコン向け'],
+      ['mid', '中', 'バランス型。スマホの標準'],
+      ['low', '低', '軽め。古い端末や重いときに'],
+      ['min', '最小', '一番軽い。雪・葉なし'],
+    ];
+    const btn = ([val, label, desc]) => `
+      <button class="btn gfxopt ${cur === val ? 'sel' : ''}" data-act="gfxpick" data-val="${val}">
+        <b>${label}</b><span>${desc}</span>
+      </button>`;
+    return `
+      <div class="card">
+        <div class="eyebrow">GRAPHICS</div>
+        <h2>画質を選んでスタート</h2>
+        <p class="sub">画面が重い・見づらいときは軽い画質を選んでください。選んだ画質は次回も使われます。</p>
+        <div class="gfxlist">
+          <button class="btn gfxopt ${cur === 'auto' ? 'sel' : ''}" data-act="gfxpick" data-val="auto">
+            <b>自動</b><span>端末に合わせて選びます（この端末では${GFX_PRESETS[autoKey].label}）</span>
+          </button>
+          ${opts.map(btn).join('')}
+        </div>
+        <div class="optrow">${B('gfxcancel', '戻る', { cls: 'big' })}</div>
+      </div>`;
+  },
   settings() {
     return `
       <div class="card">
@@ -2065,9 +2118,11 @@ overlay.addEventListener('click', e => {
   if (!b || b.disabled) return;
   const act = b.dataset.act, val = b.dataset.val;
   switch (act) {
-    case 'start': startMission(); break;
+    case 'start': askGfxThenStart('home'); break;
+    case 'gfxpick': chooseGfxAndStart(val); break;
+    case 'gfxcancel': setScreen(gfxFrom); break;
     case 'resume': resumeMission(); break;
-    case 'retry': startMission(); break;
+    case 'retry': askGfxThenStart(screen); break;
     case 'home': goHome(); break;
     case 'shop': setScreen('shop'); break;
     case 'settings':
