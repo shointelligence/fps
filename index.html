@@ -71,9 +71,11 @@ html,body{margin:0;height:100%;overflow:hidden;background:#000;color:var(--text)
 #tPause{top:12px;left:50%;margin-left:-22px;width:44px;height:44px}
 
 /* ---------- Overlay / panels ---------- */
-#overlay{position:fixed;inset:0;display:flex;align-items:center;justify-content:center;overflow:auto;
+/* 画面の上下がはみ出しても、スクロールで全体を見られるように（margin:auto で中央寄せ） */
+#overlay{position:fixed;inset:0;display:flex;justify-content:center;overflow-y:auto;overflow-x:hidden;
+  -webkit-overflow-scrolling:touch;
   background:radial-gradient(ellipse at center,rgba(20,30,42,.85) 0%,rgba(0,0,0,.92) 100%)}
-#panel{width:min(880px,94vw);margin:20px 0}
+#panel{width:min(880px,94vw);margin:auto;padding:20px 0;flex:0 0 auto}
 .card{background:linear-gradient(180deg,var(--panel2),var(--panel));border:1px solid var(--line);
   border-radius:6px;padding:22px 24px;position:relative;box-shadow:0 10px 30px rgba(0,0,0,.45)}
 .card::before{content:"";position:absolute;left:-1px;top:-1px;width:40px;height:3px;background:var(--gold)}
@@ -100,6 +102,7 @@ h2{font-size:24px;margin:4px 0 0;font-weight:800;letter-spacing:.05em}
 .devinfo span{font-size:12px;padding:4px 10px;border:1px solid var(--line);border-radius:999px;color:var(--sub)}
 .setrow{display:flex;justify-content:space-between;align-items:center;gap:14px;padding:12px 0;border-bottom:1px solid var(--line);flex-wrap:wrap}
 .setrow b{font-size:15px}
+.setrow > div:first-child{flex:1 1 180px;min-width:0}
 
 /* ---------- Buttons ---------- */
 .btn{font:700 15px sans-serif;padding:11px 20px;min-width:120px;
@@ -142,11 +145,23 @@ h2{font-size:24px;margin:4px 0 0;font-weight:800;letter-spacing:.05em}
 }
 @media (max-width:640px){
   h1.title{font-size:34px}
+  .card{padding:18px 16px}
   .loadout{grid-template-columns:1fr 1fr}
+  .seg .btn{min-width:0;flex:1 1 auto;padding:10px 10px;font-size:14px}
+  .btn.big{min-width:0;flex:1 1 40%;font-size:17px;padding:13px 16px}
   #hpBox{width:52vw}
   #ammoBox{min-width:0}
   #missionBox{min-width:0;max-width:52vw}
   #mapBox{display:none}
+}
+/* 横向きのスマホなど、画面の高さが低いとき */
+@media (max-height:500px){
+  #panel{padding:10px 0}
+  .card{padding:12px 18px}
+  h2{font-size:20px}
+  .setrow{padding:7px 0}
+  .divider{margin:10px 0}
+  .sub{margin-top:3px}
 }
 </style>
 </head>
@@ -1181,6 +1196,7 @@ const START = [1, 1];
 let gameOver = false, reloadT = 0, fireCool = 0, hitMarkT = 0, hurtT = 0, recoil = 0, kick = 0, bobT = 0;
 let toastT = 0, reinfCD = 0, mmAcc = 0;
 let screen = 'home';
+let settingsBack = 'home';    // 設定画面の「戻る」先（home / pause）
 let locked = false;           // PC: pointer lock state
 let mouseHeld = false;
 let touchFire = false;        // touch: fire button held
@@ -1924,7 +1940,7 @@ const PANELS = {
         ${optRow('マズルフラッシュ', '銃口の光', 'fxFlash', [['on', '表示'], ['off', '停止']])}
         ${optRow('雪・葉', '季節ごとに舞う雪・花びら・葉', 'fxFlake', [['on', '表示'], ['off', '停止']])}
 
-        <div class="optrow">${B('home', 'ホームへ戻る', { cls: 'big' })}</div>
+        <div class="optrow">${B('back', settingsBack === 'pause' ? '一時停止画面へ戻る' : 'ホームへ戻る', { cls: 'big' })}</div>
       </div>`;
   },
   pause() {
@@ -1935,6 +1951,7 @@ const PANELS = {
         <p class="sub">ミッション中</p>
         <div class="optrow">
           ${B('resume', '再開', { cls: 'primary big' })}
+          ${B('settings', '設定', { cls: 'big' })}
           ${B('home', 'ホームへ', { cls: 'big' })}
         </div>
         <div class="divider"></div>
@@ -2040,6 +2057,7 @@ function renderOverlay() {
   fpsEl.style.display = playing && settings.fps === 'on' ? 'block' : 'none';
   if (playing) return;
   panelEl.innerHTML = PANELS[screen]();
+  overlay.scrollTop = 0;
 }
 
 overlay.addEventListener('click', e => {
@@ -2052,7 +2070,14 @@ overlay.addEventListener('click', e => {
     case 'retry': startMission(); break;
     case 'home': goHome(); break;
     case 'shop': setScreen('shop'); break;
-    case 'settings': setScreen('settings'); break;
+    case 'settings':
+      settingsBack = screen === 'pause' ? 'pause' : 'home';
+      setScreen('settings');
+      break;
+    case 'back':
+      if (settingsBack === 'pause') setScreen('pause');
+      else goHome();
+      break;
     case 'set': applySetting(b.dataset.key, val); break;
     case 'gender': setSkin(val); break;
     case 'season': setSeason(val); break;
